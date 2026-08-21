@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   HeartHandshake,
   GraduationCap,
@@ -19,6 +19,9 @@ import {
   UserCheck,
   Activity,
   Award,
+  LogIn,
+  LogOut,
+  User,
 } from 'lucide-react';
 import { Role, StudentProfile, StaffProfile, AuthSessionUser } from '../../types';
 
@@ -39,12 +42,38 @@ export const FrontPage: React.FC<FrontPageProps> = ({
   currentSession,
   unreadAlertCount,
 }) => {
-  const [activeTab, setActiveTab] = useState<'student' | 'counselor' | 'admin'>('student');
-
   return (
     <div className="space-y-12 pb-16">
-      {/* 1. HERO SECTION */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-emerald-950 via-slate-900 to-slate-950 text-white p-6 sm:p-10 lg:p-14 shadow-2xl border border-emerald-900/40">
+      {/* ACTIVE SESSION BANNER (Only shown if already logged in) */}
+      {currentSession && (
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold">
+              {currentSession.role === 'student' ? '🎓' : currentSession.role === 'counselor' ? '🧑‍⚕️' : '🏛️'}
+            </div>
+            <div>
+              <div className="text-xs text-emerald-800 font-medium">
+                Active Session Detected
+              </div>
+              <div className="text-sm font-bold text-slate-900">
+                {(currentSession.profile as any).name} ({currentSession.role.toUpperCase()})
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              onClick={() => onSelectRole(currentSession.role)}
+              className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5"
+            >
+              <span>Go to My {currentSession.role === 'student' ? 'Check-in Portal' : currentSession.role === 'counselor' ? 'Triage Dashboard' : 'Analytics'}</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 1. HERO & MISSION OVERVIEW */}
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-emerald-950 via-slate-900 to-slate-950 text-white p-6 sm:p-10 lg:p-12 shadow-2xl border border-emerald-900/40">
         {/* Ambient background glows */}
         <div className="absolute top-0 right-0 -mt-10 -mr-10 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-1/3 -mb-10 w-80 h-80 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -64,22 +93,22 @@ export const FrontPage: React.FC<FrontPageProps> = ({
             </span>
           </h1>
 
-          {/* Subtitle / Mission Statement */}
+          {/* Subtitle */}
           <p className="text-slate-300 text-base sm:text-lg leading-relaxed max-w-3xl mx-auto">
-            Designed for Indian higher education campuses. Detects subtle longitudinal changes in
-            sleep, stress, energy, and academic pressure over time—empowering counselors with timely,
-            non-stigmatizing intervention before acute distress occurs.
+            Designed for Indian campus communities. Detects subtle longitudinal changes in
+            sleep, academic stress, energy, and concentration—enabling gentle, non-stigmatizing human
+            counselor check-ins before crises develop.
           </p>
 
-          {/* Three Key Ethics Tags */}
-          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 pt-2">
+          {/* Ethical highlights */}
+          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 pt-1">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800/80 border border-slate-700 text-xs text-slate-200">
               <EyeOff className="w-3.5 h-3.5 text-emerald-400" />
               100% Zero-Surveillance
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800/80 border border-slate-700 text-xs text-slate-200">
               <TrendingUp className="w-3.5 h-3.5 text-teal-400" />
-              Longitudinal Pattern Analysis
+              Longitudinal Slope Analysis
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800/80 border border-slate-700 text-xs text-slate-200">
               <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
@@ -87,13 +116,13 @@ export const FrontPage: React.FC<FrontPageProps> = ({
             </span>
           </div>
 
-          {/* Primary Action Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
+          {/* Action Row */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-3">
             <a
               href="#login-portals"
               className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2"
             >
-              <span>Access 3-Way Portals</span>
+              <span>Who Do You Want to Login As?</span>
               <ArrowRight className="w-4 h-4" />
             </a>
             <button
@@ -114,24 +143,24 @@ export const FrontPage: React.FC<FrontPageProps> = ({
         </div>
       </section>
 
-      {/* 2. THE 3-WAY LOGIN & PORTAL GATEWAY SECTION */}
+      {/* 2. THE CORE QUESTION: WHO DO YOU WANT TO LOGIN AS? */}
       <section id="login-portals" className="space-y-6 scroll-mt-20">
         <div className="text-center space-y-2 max-w-2xl mx-auto">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Role-Based Authentication</span>
+            <UserCheck className="w-3.5 h-3.5" />
+            <span>Role-Based Authentication Gateway</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Select Your Portal & Sign In
+            Who do you want to login as?
           </h2>
           <p className="text-sm text-slate-600">
-            Dedicated entrances tailored for Students, Clinical Counselors, and Institutional Administrators.
+            Please choose your role to enter your dedicated portal or use 1-click verified demo accounts.
           </p>
         </div>
 
-        {/* 3-Way Interactive Portal Cards */}
+        {/* 3-WAY LOGIN PORTAL CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* PORTAL 1: STUDENT */}
+          {/* CARD 1: STUDENT */}
           <div className="bg-white rounded-2xl border-2 border-emerald-500/80 shadow-md hover:shadow-xl transition-all p-6 flex flex-col justify-between relative overflow-hidden group">
             <div className="absolute top-0 right-0 px-3 py-1 bg-emerald-600 text-white text-[10px] font-bold rounded-bl-xl uppercase tracking-wider">
               Student Hub
@@ -144,35 +173,32 @@ export const FrontPage: React.FC<FrontPageProps> = ({
 
               <div>
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  Student Portal
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-normal">
-                    विद्यार्थी
-                  </span>
+                  Student / विद्यार्थी
                 </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Private wellness self check-ins, Hinglish/English voice reflections, longitudinal trends, and breathing exercises.
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Log in to submit 60-second weekly check-ins, record Hinglish/English voice reflections, view your longitudinal trends, and practice breathing exercises.
                 </p>
               </div>
 
               <div className="space-y-2 pt-2 border-t border-slate-100 text-xs text-slate-600">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>60-second weekly micro check-ins</span>
+                  <span>Private weekly micro check-ins</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>Hinglish voice journal & audio synthesis</span>
+                  <span>Voice journal with supportive reflection</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>Granular consent toggles (Zero surveillance)</span>
+                  <span>Granular privacy & consent controls</span>
                 </div>
               </div>
 
               {/* 1-Click Demo Profiles */}
               <div className="pt-3 border-t border-slate-100">
                 <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  Quick Demo Student Accounts:
+                  1-Click Student Demo Accounts:
                 </div>
                 <div className="grid grid-cols-1 gap-1.5">
                   <button
@@ -183,7 +209,7 @@ export const FrontPage: React.FC<FrontPageProps> = ({
                   >
                     <div>
                       <div className="font-bold text-emerald-950">Aarav Sharma (STU-1024)</div>
-                      <div className="text-[10px] text-emerald-700">Week 4 • Declining Sleep & Lab Stress</div>
+                      <div className="text-[10px] text-emerald-700">Week 4 • Declining sleep & project stress</div>
                     </div>
                     <span className="text-[10px] font-bold text-emerald-700 bg-white px-2 py-0.5 rounded shadow-2xs">
                       1-Click
@@ -197,7 +223,7 @@ export const FrontPage: React.FC<FrontPageProps> = ({
                   >
                     <div>
                       <div className="font-bold text-slate-900">Priya Patel (STU-1089)</div>
-                      <div className="text-[10px] text-slate-500">Week 3 • Balanced & Stable</div>
+                      <div className="text-[10px] text-slate-500">Week 3 • Balanced & stable baseline</div>
                     </div>
                     <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded shadow-2xs">
                       1-Click
@@ -209,22 +235,22 @@ export const FrontPage: React.FC<FrontPageProps> = ({
 
             <div className="pt-5 space-y-2">
               <button
-                onClick={() => onSelectRole('student')}
+                onClick={() => onOpenAuthModal('student')}
                 className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2"
               >
-                <span>Enter Student Portal</span>
-                <ArrowRight className="w-4 h-4" />
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Log In as Student</span>
               </button>
               <button
                 onClick={() => onOpenAuthModal('student')}
                 className="w-full py-2 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs transition-all text-center"
               >
-                Sign In / Register with Email
+                New Student? Register with ID
               </button>
             </div>
           </div>
 
-          {/* PORTAL 2: COUNSELOR */}
+          {/* CARD 2: COUNSELOR */}
           <div className="bg-white rounded-2xl border-2 border-teal-500/80 shadow-md hover:shadow-xl transition-all p-6 flex flex-col justify-between relative overflow-hidden group">
             <div className="absolute top-0 right-0 px-3 py-1 bg-teal-600 text-white text-[10px] font-bold rounded-bl-xl uppercase tracking-wider flex items-center gap-1">
               <Lock className="w-2.5 h-2.5" />
@@ -238,20 +264,17 @@ export const FrontPage: React.FC<FrontPageProps> = ({
 
               <div>
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  Counselor Portal
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 font-normal">
-                    परामर्शदाता
-                  </span>
+                  Counselor / परामर्शदाता
                 </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Longitudinal triage matrix, AI-powered clinical summaries, privacy-preserving alerts, and proactive outreach scheduling.
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  For campus psychologists and wellness officers. Access the longitudinal triage matrix, AI clinical summaries, and proactive check-in logs.
                 </p>
               </div>
 
               <div className="space-y-2 pt-2 border-t border-slate-100 text-xs text-slate-600">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                  <span>Multi-week downward trajectory alerts</span>
+                  <span>Multi-week downward slope alerts</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
@@ -259,14 +282,14 @@ export const FrontPage: React.FC<FrontPageProps> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                  <span>Proactive, non-stigmatizing check-in logger</span>
+                  <span>Proactive outreach & touchpoint logger</span>
                 </div>
               </div>
 
               {/* 1-Click Demo Staff */}
               <div className="pt-3 border-t border-slate-100">
                 <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  Quick Demo Staff Credentials:
+                  1-Click Counselor Demo Accounts:
                 </div>
                 <div className="grid grid-cols-1 gap-1.5">
                   <button
@@ -291,7 +314,7 @@ export const FrontPage: React.FC<FrontPageProps> = ({
                   >
                     <div>
                       <div className="font-bold text-slate-900">Dr. Rajesh Verma</div>
-                      <div className="text-[10px] text-slate-500">Academic Stress Counselor</div>
+                      <div className="text-[10px] text-slate-500">Student Welfare Specialist</div>
                     </div>
                     <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded shadow-2xs">
                       1-Click
@@ -303,25 +326,22 @@ export const FrontPage: React.FC<FrontPageProps> = ({
 
             <div className="pt-5 space-y-2">
               <button
-                onClick={() => {
-                  onQuickAuthenticate('counselor', 'counselor.sharma@campus.edu', 'counselor123');
-                  onSelectRole('counselor');
-                }}
+                onClick={() => onOpenAuthModal('counselor')}
                 className="w-full py-2.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md shadow-teal-600/20 transition-all flex items-center justify-center gap-2"
               >
-                <span>Enter Counselor Portal</span>
-                <ArrowRight className="w-4 h-4" />
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Log In as Counselor</span>
               </button>
               <button
-                onClick={() => onOpenAuthModal('counselor')}
+                onClick={() => onQuickAuthenticate('counselor', 'counselor.sharma@campus.edu', 'counselor123')}
                 className="w-full py-2 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs transition-all text-center"
               >
-                Staff Login with Password
+                Quick Enter Demo Dashboard
               </button>
             </div>
           </div>
 
-          {/* PORTAL 3: INSTITUTIONAL ADMIN */}
+          {/* CARD 3: INSTITUTIONAL ADMIN */}
           <div className="bg-white rounded-2xl border-2 border-indigo-500/80 shadow-md hover:shadow-xl transition-all p-6 flex flex-col justify-between relative overflow-hidden group">
             <div className="absolute top-0 right-0 px-3 py-1 bg-indigo-600 text-white text-[10px] font-bold rounded-bl-xl uppercase tracking-wider flex items-center gap-1">
               <Lock className="w-2.5 h-2.5" />
@@ -335,20 +355,17 @@ export const FrontPage: React.FC<FrontPageProps> = ({
 
               <div>
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  Admin Portal
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-normal">
-                    प्रशासन
-                  </span>
+                  Administrator / प्रशासन
                 </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Aggregated department stress heatmaps, semester exam risk timelines, and resource allocation—no individual tracking.
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  For Deans and Academic Leadership. View aggregated department stress heatmaps and exam pacing without individual student de-anonymization.
                 </p>
               </div>
 
               <div className="space-y-2 pt-2 border-t border-slate-100 text-xs text-slate-600">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                  <span>Campus-wide stress & sleep heatmaps</span>
+                  <span>Aggregated department stress heatmaps</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
@@ -356,14 +373,14 @@ export const FrontPage: React.FC<FrontPageProps> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                  <span>Strict anonymization (k-anonymity compliance)</span>
+                  <span>Zero individual student surveillance</span>
                 </div>
               </div>
 
               {/* 1-Click Demo Admin */}
               <div className="pt-3 border-t border-slate-100">
                 <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  Quick Demo Admin Credentials:
+                  1-Click Admin Demo Accounts:
                 </div>
                 <div className="grid grid-cols-1 gap-1.5">
                   <button
@@ -400,20 +417,17 @@ export const FrontPage: React.FC<FrontPageProps> = ({
 
             <div className="pt-5 space-y-2">
               <button
-                onClick={() => {
-                  onQuickAuthenticate('admin', 'admin@campus.edu', 'admin123');
-                  onSelectRole('admin');
-                }}
+                onClick={() => onOpenAuthModal('admin')}
                 className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2"
               >
-                <span>Enter Admin Portal</span>
-                <ArrowRight className="w-4 h-4" />
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Log In as Administrator</span>
               </button>
               <button
-                onClick={() => onOpenAuthModal('admin')}
+                onClick={() => onQuickAuthenticate('admin', 'admin@campus.edu', 'admin123')}
                 className="w-full py-2 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs transition-all text-center"
               >
-                Institutional Login with Password
+                Quick Enter Demo Analytics
               </button>
             </div>
           </div>
@@ -448,69 +462,50 @@ export const FrontPage: React.FC<FrontPageProps> = ({
             </div>
             <h3 className="text-base font-bold text-slate-900">Zero-Surveillance Architecture</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              No campus Wi-Fi snooping, biometric scraping, or keylogging. All data is student-authored with granular consent toggles and complete isolation from disciplinary records.
+              No keystroke logging, no LMS activity scraping, no webcam or social media tracking. 100% of data is voluntarily student-authored with revocable consent.
             </p>
           </div>
 
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
-              <Brain className="w-5 h-5" />
+              <HeartHandshake className="w-5 h-5" />
             </div>
             <h3 className="text-base font-bold text-slate-900">Human-in-the-Loop Triage</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              AI does not diagnose or make clinical decisions. It acts purely as a clinical summarizer for certified campus psychologists to facilitate gentle, timely human conversations.
+              AI serves solely as a communication briefing tool to reduce counselor workload. The AI never delivers autonomous clinical diagnoses or labels students.
             </p>
           </div>
         </div>
       </section>
 
-      {/* 4. FOUR-WEEK INTERACTIVE STORY CASE STUDY CALLOUT */}
-      <section className="bg-gradient-to-r from-amber-500/10 via-emerald-500/10 to-teal-500/10 rounded-3xl p-6 sm:p-8 border border-amber-200/80 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
-        <div className="space-y-3 max-w-2xl">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-bold">
-            <Sparkles className="w-3.5 h-3.5 text-amber-700" />
-            <span>Interactive Case Walkthrough</span>
-          </div>
-          <h3 className="text-xl sm:text-2xl font-bold text-slate-900">
-            Follow "Aarav Sharma's" 4-Week Journey
-          </h3>
-          <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-            Experience how MannMitra detects Aarav's transition from Semester Onset (Week 1) to Lab Deadline Fatigue (Week 3) and Severe Academic Overload (Week 4), triggering a supportive counselor check-in that restores his balance.
-          </p>
-        </div>
-
-        <button
-          onClick={() => onSelectRole('story_mode')}
-          className="shrink-0 px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-md transition-all flex items-center gap-2"
-        >
-          <span>Launch 4-Week Story</span>
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      </section>
-
-      {/* 5. NATIONAL CRISIS & TELE-MANAS HELPLINE FOOTER BANNER */}
-      <section className="bg-slate-900 text-white rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
-            <PhoneCall className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="font-bold text-sm text-rose-300">
-              National Mental Health Helplines (India)
+      {/* 4. EMERGENCY & 24x7 HELPLINES */}
+      <section className="rounded-2xl bg-gradient-to-r from-rose-50 via-amber-50 to-emerald-50 border border-rose-200/80 p-6 sm:p-8">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-100 text-rose-800 text-xs font-bold">
+              <PhoneCall className="w-3.5 h-3.5" />
+              <span>National 24x7 Student Support Helplines (India)</span>
             </div>
-            <div className="text-xs text-slate-400">
-              Free, confidential 24x7 psychological support for students across India
+            <h3 className="text-lg font-bold text-slate-900">
+              Immediate, Free & Confidential Crisis Support
+            </h3>
+            <p className="text-xs text-slate-600 max-w-2xl">
+              MannMitra is an early-warning wellbeing platform. If you or someone you know is in acute distress, please reach out to dedicated national support lines immediately:
+            </p>
+          </div>
+
+          <div className="flex flex-wrap sm:flex-nowrap gap-3 shrink-0">
+            <div className="p-3 bg-white rounded-xl border border-rose-200 shadow-xs text-xs">
+              <div className="font-bold text-rose-900">Tele-MANAS (MoHFW)</div>
+              <div className="text-base font-mono font-extrabold text-rose-600">14416</div>
+              <div className="text-[10px] text-slate-500">Toll-Free • 24x7 • Multi-lingual</div>
+            </div>
+            <div className="p-3 bg-white rounded-xl border border-amber-200 shadow-xs text-xs">
+              <div className="font-bold text-amber-900">KIRAN (MSJE)</div>
+              <div className="text-base font-mono font-extrabold text-amber-700">1800-599-0019</div>
+              <div className="text-[10px] text-slate-500">Mental Health Helpline</div>
             </div>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 text-xs">
-          <span className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-emerald-300">
-            Tele-MANAS: 14416 / 1800-891-4416
-          </span>
-          <span className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-cyan-300">
-            KIRAN: 1800-599-0019
-          </span>
         </div>
       </section>
     </div>

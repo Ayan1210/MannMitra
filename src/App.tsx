@@ -15,7 +15,6 @@ import {
   authStorage,
 } from './lib/api';
 import { Navbar } from './components/Navbar';
-import { DashboardRoleSelector } from './components/Dashboard/DashboardRoleSelector';
 import { FrontPage } from './components/Landing/FrontPage';
 import { StudentDashboard } from './components/StudentView/StudentDashboard';
 import { StudentCheckInModal } from './components/StudentView/StudentCheckInModal';
@@ -51,7 +50,7 @@ export default function App() {
   const [authModalTargetRole, setAuthModalTargetRole] = useState<'student' | 'counselor' | 'admin'>('student');
   const [isEthicsModalOpen, setIsEthicsModalOpen] = useState(false);
 
-  // Load students and active session from SQLite3 Express backend on startup
+  // Load students and actions from backend on startup (clean unauthenticated landing)
   useEffect(() => {
     async function initData() {
       try {
@@ -63,14 +62,6 @@ export default function App() {
         const backendActions = await fetchCounselorActions();
         if (backendActions && backendActions.length > 0) {
           setCounselorActions(backendActions);
-        }
-
-        const savedSession = await getAuthSession();
-        if (savedSession) {
-          setAuthSession(savedSession);
-          if (savedSession.role === 'student') {
-            setActiveStudentId(savedSession.profile.id);
-          }
         }
       } catch (err) {
         console.warn('Initial data synchronization note:', err);
@@ -92,7 +83,7 @@ export default function App() {
     newCheckInData: Omit<CheckInRecord, 'id' | 'studentId' | 'date' | 'weekNumber'>
   ) => {
     try {
-      // Submit to SQLite backend API
+      // Submit to backend API
       const result = await submitCheckIn({
         studentId: currentStudent.id,
         overallWellbeing: newCheckInData.overallWellbeing,
@@ -180,7 +171,7 @@ export default function App() {
     authStorage.clear();
     setAuthSession(null);
     setActiveStudentId('stu-1024');
-    setCurrentRole('student');
+    setCurrentRole('landing');
   };
 
   const handleUpdateConsent = async (newConsent: StudentProfile['consent']) => {
@@ -276,27 +267,6 @@ export default function App() {
     });
   };
 
-  // Quick authorization helper for evaluation / instant role switching
-  const handleQuickAuthRole = async (targetRole: 'counselor' | 'admin') => {
-    try {
-      if (targetRole === 'counselor') {
-        const { user, token } = await loginCounselor({
-          email: 'counselor.sharma@campus.edu',
-          password: 'counselor123',
-        });
-        handleAuthSuccess({ role: 'counselor', profile: user, token });
-      } else if (targetRole === 'admin') {
-        const { user, token } = await loginAdmin({
-          email: 'admin@campus.edu',
-          password: 'admin123',
-        });
-        handleAuthSuccess({ role: 'admin', profile: user, token });
-      }
-    } catch (err) {
-      console.warn('Quick demo login fallback:', err);
-    }
-  };
-
   const handleQuickAuthenticateCredentials = async (
     role: 'student' | 'counselor' | 'admin',
     email: string,
@@ -324,6 +294,7 @@ export default function App() {
   };
 
   // Role Access Checks
+  const isStudentAuthorized = authSession?.role === 'student';
   const isCounselorAuthorized = authSession?.role === 'counselor';
   const isAdminAuthorized = authSession?.role === 'admin';
 
@@ -340,15 +311,6 @@ export default function App() {
         currentSession={authSession}
         onOpenAuthModal={handleOpenAuth}
         onLogout={handleLogout}
-      />
-
-      {/* Role Selection & Dashboard Perspective Switcher */}
-      <DashboardRoleSelector
-        currentRole={currentRole}
-        onSelectRole={setCurrentRole}
-        currentSession={authSession}
-        onQuickAuth={handleQuickAuthRole}
-        unreadAlertCount={unreadAlerts}
       />
 
       {/* Main Content Area */}
@@ -370,10 +332,16 @@ export default function App() {
               if (isCounselorAuthorized) {
                 setCurrentRole('counselor');
               } else {
-                handleQuickAuthRole('counselor');
+                handleQuickAuthenticateCredentials('counselor', 'counselor.sharma@campus.edu', 'counselor123');
               }
             }}
-            onSwitchToStudent={() => setCurrentRole('student')}
+            onSwitchToStudent={() => {
+              if (isStudentAuthorized) {
+                setCurrentRole('student');
+              } else {
+                handleQuickAuthenticateCredentials('student', 'aarav.sharma@campus.edu', 'password123');
+              }
+            }}
           />
         )}
 
@@ -401,7 +369,7 @@ export default function App() {
               currentSession={authSession}
               onOpenLoginModal={(role) => handleOpenAuth(role)}
               onQuickAuthenticate={handleQuickAuthenticateCredentials}
-              onReturnToStudent={() => setCurrentRole('student')}
+              onReturnToStudent={() => setCurrentRole('landing')}
             />
           )
         )}
@@ -415,7 +383,7 @@ export default function App() {
               currentSession={authSession}
               onOpenLoginModal={(role) => handleOpenAuth(role)}
               onQuickAuthenticate={handleQuickAuthenticateCredentials}
-              onReturnToStudent={() => setCurrentRole('student')}
+              onReturnToStudent={() => setCurrentRole('landing')}
             />
           )
         )}
@@ -474,4 +442,3 @@ export default function App() {
     </div>
   );
 }
-

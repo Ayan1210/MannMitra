@@ -213,58 +213,24 @@ export const RoleAuthModal: React.FC<RoleAuthModalProps> = ({
               : 'Cohort-level stress heatmaps, audit logs & institutional policies'}
           </p>
 
-          {/* Role Tabs */}
-          <div className="grid grid-cols-3 gap-1 bg-black/30 p-1.5 rounded-2xl mt-4 text-xs font-semibold">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('student');
-                setError(null);
-                setSuccessMsg(null);
-              }}
-              className={`py-2 px-2 rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-                activeTab === 'student'
-                  ? 'bg-white text-emerald-900 shadow-md font-bold'
-                  : 'text-slate-200 hover:text-white'
-              }`}
-            >
-              <GraduationCap className="w-4 h-4" />
-              <span>Student</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('counselor');
-                setError(null);
-                setSuccessMsg(null);
-              }}
-              className={`py-2 px-2 rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-                activeTab === 'counselor'
-                  ? 'bg-white text-teal-900 shadow-md font-bold'
-                  : 'text-slate-200 hover:text-white'
-              }`}
-            >
-              <Stethoscope className="w-4 h-4" />
-              <span>Counselor</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('admin');
-                setError(null);
-                setSuccessMsg(null);
-              }}
-              className={`py-2 px-2 rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-                activeTab === 'admin'
-                  ? 'bg-white text-slate-900 shadow-md font-bold'
-                  : 'text-slate-200 hover:text-white'
-              }`}
-            >
-              <Building2 className="w-4 h-4" />
-              <span>Admin</span>
-            </button>
+          {/* Role Badge Indicator */}
+          <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-xs font-semibold backdrop-blur-xs">
+            {activeTab === 'student' ? (
+              <>
+                <GraduationCap className="w-3.5 h-3.5" />
+                <span>Dedicated Student Portal</span>
+              </>
+            ) : activeTab === 'counselor' ? (
+              <>
+                <Stethoscope className="w-3.5 h-3.5" />
+                <span>Authorized Campus Counselor Portal</span>
+              </>
+            ) : (
+              <>
+                <Building2 className="w-3.5 h-3.5" />
+                <span>Institutional Administrator Portal</span>
+              </>
+            )}
           </div>
         </div>
 

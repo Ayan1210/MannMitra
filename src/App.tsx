@@ -9,12 +9,14 @@ import {
   updateConsentSettings,
   fetchCounselorActions,
   logCounselorAction,
+  loginStudent,
   loginCounselor,
   loginAdmin,
   authStorage,
 } from './lib/api';
 import { Navbar } from './components/Navbar';
 import { DashboardRoleSelector } from './components/Dashboard/DashboardRoleSelector';
+import { FrontPage } from './components/Landing/FrontPage';
 import { StudentDashboard } from './components/StudentView/StudentDashboard';
 import { StudentCheckInModal } from './components/StudentView/StudentCheckInModal';
 import { RoleAuthModal } from './components/Auth/RoleAuthModal';
@@ -25,7 +27,7 @@ import { AaravStoryWalkthrough } from './components/StoryMode/AaravStoryWalkthro
 import { EthicalFrameworkModal } from './components/EthicalSafeguards/EthicalFrameworkModal';
 
 export default function App() {
-  const [currentRole, setCurrentRole] = useState<Role>('student');
+  const [currentRole, setCurrentRole] = useState<Role>('landing');
   const [students, setStudents] = useState<StudentProfile[]>(INITIAL_STUDENTS);
   const [activeStudentId, setActiveStudentId] = useState<string>('stu-1024');
   const [authSession, setAuthSession] = useState<AuthSessionUser | null>(null);
@@ -296,17 +298,24 @@ export default function App() {
   };
 
   const handleQuickAuthenticateCredentials = async (
-    role: 'counselor' | 'admin',
+    role: 'student' | 'counselor' | 'admin',
     email: string,
     pass: string
   ) => {
     try {
-      if (role === 'counselor') {
+      if (role === 'student') {
+        const { student, token } = await loginStudent({ email, password: pass });
+        setActiveStudentId(student.id);
+        handleAuthSuccess({ role: 'student', profile: student, token });
+        setCurrentRole('student');
+      } else if (role === 'counselor') {
         const { user, token } = await loginCounselor({ email, password: pass });
         handleAuthSuccess({ role: 'counselor', profile: user, token });
+        setCurrentRole('counselor');
       } else if (role === 'admin') {
         const { user, token } = await loginAdmin({ email, password: pass });
         handleAuthSuccess({ role: 'admin', profile: user, token });
+        setCurrentRole('admin');
       }
     } catch (err) {
       console.error('Login error:', err);
@@ -344,6 +353,17 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+        {currentRole === 'landing' && (
+          <FrontPage
+            onSelectRole={setCurrentRole}
+            onOpenAuthModal={handleOpenAuth}
+            onQuickAuthenticate={handleQuickAuthenticateCredentials}
+            onOpenEthicsModal={() => setIsEthicsModalOpen(true)}
+            currentSession={authSession}
+            unreadAlertCount={unreadAlerts}
+          />
+        )}
+
         {currentRole === 'story_mode' && (
           <AaravStoryWalkthrough
             onSwitchToCounselor={() => {

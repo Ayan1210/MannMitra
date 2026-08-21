@@ -1,4 +1,4 @@
-export type Role = 'student' | 'counselor' | 'admin' | 'story_mode';
+export type Role = 'landing' | 'student' | 'counselor' | 'admin' | 'story_mode';
 
 export type UserRole = 'student' | 'counselor' | 'admin';
 

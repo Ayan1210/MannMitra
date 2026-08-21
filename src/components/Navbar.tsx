@@ -34,8 +34,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo & Brand */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 via-teal-500 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
+          <div
+            onClick={() => onSelectRole('landing')}
+            className="flex items-center gap-3 cursor-pointer group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 via-teal-500 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-emerald-500/20 group-hover:scale-105 transition-transform">
               <HeartHandshake className="w-6 h-6" />
             </div>
             <div>
@@ -55,6 +58,19 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Role Navigation Pills */}
           <div className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 text-xs sm:text-sm font-medium">
+            <button
+              onClick={() => onSelectRole('landing')}
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                currentRole === 'landing'
+                  ? 'bg-white text-emerald-800 shadow-xs font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span>🏠</span>
+              <span className="hidden sm:inline">Overview</span>
+              <span className="sm:hidden">Home</span>
+            </button>
+
             <button
               onClick={() => onSelectRole('student')}
               className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${

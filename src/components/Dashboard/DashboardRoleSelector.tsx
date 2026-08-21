@@ -59,7 +59,38 @@ export const DashboardRoleSelector: React.FC<DashboardRoleSelectorProps> = ({
           </div>
 
           {/* Interactive Role Cards / Selector Pills */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {/* 0. Front Page Overview */}
+            <button
+              onClick={() => onSelectRole('landing')}
+              className={`p-2.5 rounded-xl border text-left transition-all relative flex flex-col justify-between ${
+                currentRole === 'landing'
+                  ? 'bg-emerald-50/90 border-emerald-600 ring-2 ring-emerald-500/20 shadow-sm'
+                  : 'bg-slate-50/70 hover:bg-slate-100 border-slate-200 text-slate-700'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900">
+                  <div
+                    className={`w-5 h-5 rounded-md flex items-center justify-center ${
+                      currentRole === 'landing'
+                        ? 'bg-emerald-700 text-white'
+                        : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <span>🏠</span>
+                  </div>
+                  <span>Overview</span>
+                </div>
+                {currentRole === 'landing' && (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                )}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1 leading-tight">
+                Front Page & Portals
+              </div>
+            </button>
+
             {/* 1. Student Option */}
             <button
               onClick={() => onSelectRole('student')}

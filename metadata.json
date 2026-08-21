@@ -1,0 +1,8 @@
+{
+  "name": "Remix MannMitra - Student Wellbeing Early-Warning System",
+  "description": "A consent-based, privacy-first student wellbeing early-warning platform. Detects multi-dimensional wellbeing pattern changes over time to empower counselors with timely, ethical check-ins.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

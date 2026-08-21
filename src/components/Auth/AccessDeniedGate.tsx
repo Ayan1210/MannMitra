@@ -6,6 +6,7 @@ interface AccessDeniedGateProps {
   attemptedRole: 'counselor' | 'admin';
   currentSession: AuthSessionUser | null;
   onOpenLoginModal: (targetRole: 'counselor' | 'admin') => void;
+  onQuickAuthenticate?: (role: 'counselor' | 'admin', email: string, pass: string) => void;
   onReturnToStudent: () => void;
 }
 
@@ -13,11 +14,20 @@ export const AccessDeniedGate: React.FC<AccessDeniedGateProps> = ({
   attemptedRole,
   currentSession,
   onOpenLoginModal,
+  onQuickAuthenticate,
   onReturnToStudent,
 }) => {
   const isCounselor = attemptedRole === 'counselor';
   const portalName = isCounselor ? 'Counselor Early-Warning Portal' : 'Institutional Admin Portal';
   const roleName = isCounselor ? 'Campus Counselor / Psychologist' : 'Institutional Administrator';
+
+  const handleQuick = (email: string, pass: string) => {
+    if (onQuickAuthenticate) {
+      onQuickAuthenticate(attemptedRole, email, pass);
+    } else {
+      onOpenLoginModal(attemptedRole);
+    }
+  };
 
   return (
     <div className="py-12 px-4 max-w-3xl mx-auto">
@@ -72,53 +82,77 @@ export const AccessDeniedGate: React.FC<AccessDeniedGateProps> = ({
 
             {isCounselor ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
-                  <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <Stethoscope className="w-3.5 h-3.5 text-teal-600" />
-                    Dr. Ananya Sharma
+                <button
+                  type="button"
+                  onClick={() => handleQuick('counselor.sharma@campus.edu', 'counselor123')}
+                  className="p-3 bg-white hover:bg-teal-50/70 hover:border-teal-400 rounded-xl border border-slate-200 shadow-2xs text-left transition-all group"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-slate-800 flex items-center gap-1.5 group-hover:text-teal-800">
+                      <Stethoscope className="w-3.5 h-3.5 text-teal-600" />
+                      Dr. Ananya Sharma
+                    </div>
+                    <span className="text-[10px] text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded font-semibold">1-Click Login</span>
                   </div>
-                  <div className="text-slate-500 text-[11px]">Lead Campus Psychologist</div>
+                  <div className="text-slate-500 text-[11px] mt-0.5">Lead Campus Psychologist</div>
                   <div className="mt-2 font-mono text-[11px] bg-slate-100 p-1.5 rounded-lg text-slate-700">
-                    counselor.sharma@campus.edu <br />
-                    <span className="text-slate-500">Password:</span> counselor123
+                    counselor.sharma@campus.edu
                   </div>
-                </div>
-                <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
-                  <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <Stethoscope className="w-3.5 h-3.5 text-teal-600" />
-                    Dr. Rajesh Verma
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuick('counselor.verma@campus.edu', 'counselor123')}
+                  className="p-3 bg-white hover:bg-teal-50/70 hover:border-teal-400 rounded-xl border border-slate-200 shadow-2xs text-left transition-all group"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-slate-800 flex items-center gap-1.5 group-hover:text-teal-800">
+                      <Stethoscope className="w-3.5 h-3.5 text-teal-600" />
+                      Dr. Rajesh Verma
+                    </div>
+                    <span className="text-[10px] text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded font-semibold">1-Click Login</span>
                   </div>
-                  <div className="text-slate-500 text-[11px]">Academic Stress Counselor</div>
+                  <div className="text-slate-500 text-[11px] mt-0.5">Academic Stress Counselor</div>
                   <div className="mt-2 font-mono text-[11px] bg-slate-100 p-1.5 rounded-lg text-slate-700">
-                    counselor.verma@campus.edu <br />
-                    <span className="text-slate-500">Password:</span> counselor123
+                    counselor.verma@campus.edu
                   </div>
-                </div>
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
-                  <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-slate-800" />
-                    Prof. Meenakshi Sundaram
+                <button
+                  type="button"
+                  onClick={() => handleQuick('admin@campus.edu', 'admin123')}
+                  className="p-3 bg-white hover:bg-slate-100 hover:border-slate-400 rounded-xl border border-slate-200 shadow-2xs text-left transition-all group"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-slate-800 flex items-center gap-1.5 group-hover:text-slate-950">
+                      <Building2 className="w-3.5 h-3.5 text-slate-800" />
+                      Prof. Meenakshi Sundaram
+                    </div>
+                    <span className="text-[10px] text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded font-semibold">1-Click Login</span>
                   </div>
-                  <div className="text-slate-500 text-[11px]">Dean of Student Affairs</div>
+                  <div className="text-slate-500 text-[11px] mt-0.5">Dean of Student Affairs</div>
                   <div className="mt-2 font-mono text-[11px] bg-slate-100 p-1.5 rounded-lg text-slate-700">
-                    admin@campus.edu <br />
-                    <span className="text-slate-500">Password:</span> admin123
+                    admin@campus.edu
                   </div>
-                </div>
-                <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
-                  <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-slate-800" />
-                    Dr. Vikram Malhotra
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuick('director@campus.edu', 'admin123')}
+                  className="p-3 bg-white hover:bg-slate-100 hover:border-slate-400 rounded-xl border border-slate-200 shadow-2xs text-left transition-all group"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-slate-800 flex items-center gap-1.5 group-hover:text-slate-950">
+                      <Building2 className="w-3.5 h-3.5 text-slate-800" />
+                      Dr. Vikram Malhotra
+                    </div>
+                    <span className="text-[10px] text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded font-semibold">1-Click Login</span>
                   </div>
-                  <div className="text-slate-500 text-[11px]">Campus Director</div>
+                  <div className="text-slate-500 text-[11px] mt-0.5">Campus Director</div>
                   <div className="mt-2 font-mono text-[11px] bg-slate-100 p-1.5 rounded-lg text-slate-700">
-                    director@campus.edu <br />
-                    <span className="text-slate-500">Password:</span> admin123
+                    director@campus.edu
                   </div>
-                </div>
+                </button>
               </div>
             )}
           </div>

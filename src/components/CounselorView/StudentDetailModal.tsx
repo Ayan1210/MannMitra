@@ -96,11 +96,15 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   const paddingY = 25;
 
   const getPoints = (accessor: (c: typeof checkIns[0]) => number) => {
+    if (!checkIns || checkIns.length === 0) return [];
     return checkIns.map((ck, i) => {
-      const x = paddingX + (i / Math.max(1, maxWeeks - 1)) * (chartWidth - paddingX * 2);
-      const val = accessor(ck);
-      const y = chartHeight - paddingY - ((val - 1) / 4) * (chartHeight - paddingY * 2);
-      return { x, y, val, week: ck.weekNumber, date: ck.date };
+      const rawX = paddingX + (i / Math.max(1, maxWeeks - 1)) * (chartWidth - paddingX * 2);
+      const rawVal = accessor(ck);
+      const val = typeof rawVal === 'number' && Number.isFinite(rawVal) ? Math.max(1, Math.min(5, rawVal)) : 3;
+      const rawY = chartHeight - paddingY - ((val - 1) / 4) * (chartHeight - paddingY * 2);
+      const x = Number.isFinite(rawX) ? rawX : paddingX;
+      const y = Number.isFinite(rawY) ? rawY : chartHeight / 2;
+      return { x, y, val, week: ck.weekNumber ?? (i + 1), date: ck.date };
     });
   };
 
@@ -108,8 +112,14 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   const stressPts = getPoints((c) => c.academicStress);
   const sleepPts = getPoints((c) => c.sleepQuality);
 
-  const makePath = (pts: typeof wellbeingPts) =>
-    pts.reduce((acc, curr, idx) => (idx === 0 ? `M ${curr.x} ${curr.y}` : `${acc} L ${curr.x} ${curr.y}`), '');
+  const makePath = (pts: typeof wellbeingPts) => {
+    const validPts = pts.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+    if (validPts.length === 0) return '';
+    return validPts.reduce(
+      (acc, curr, idx) => (idx === 0 ? `M ${curr.x} ${curr.y}` : `${acc} L ${curr.x} ${curr.y}`),
+      ''
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
@@ -290,22 +300,23 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   >
                     {/* Horizontal Scale Grid (1-5) */}
                     {[1, 2, 3, 4, 5].map((lvl) => {
-                      const y =
+                      const rawY =
                         chartHeight - paddingY - ((lvl - 1) / 4) * (chartHeight - paddingY * 2);
+                      const safeY = Number.isFinite(rawY) ? rawY : chartHeight / 2;
                       return (
                         <g key={lvl}>
                           <line
                             x1={paddingX - 10}
-                            y1={y}
+                            y1={safeY}
                             x2={chartWidth - paddingX + 10}
-                            y2={y}
+                            y2={safeY}
                             stroke="#e2e8f0"
                             strokeDasharray="4 4"
                             strokeWidth="1"
                           />
                           <text
                             x={paddingX - 22}
-                            y={y + 3}
+                            y={safeY + 3}
                             fontSize="10"
                             fill="#94a3b8"
                             textAnchor="middle"
@@ -328,8 +339,8 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                     {wellbeingPts.map((p, i) => (
                       <circle
                         key={`m-${i}`}
-                        cx={p.x}
-                        cy={p.y}
+                        cx={Number.isFinite(p.x) ? p.x : paddingX}
+                        cy={Number.isFinite(p.y) ? p.y : chartHeight / 2}
                         r="4.5"
                         className="fill-emerald-600 stroke-white stroke-2"
                       />
@@ -347,8 +358,8 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                     {stressPts.map((p, i) => (
                       <circle
                         key={`s-${i}`}
-                        cx={p.x}
-                        cy={p.y}
+                        cx={Number.isFinite(p.x) ? p.x : paddingX}
+                        cy={Number.isFinite(p.y) ? p.y : chartHeight / 2}
                         r="4.5"
                         className="fill-amber-500 stroke-white stroke-2"
                       />
@@ -365,8 +376,8 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                     {sleepPts.map((p, i) => (
                       <circle
                         key={`sl-${i}`}
-                        cx={p.x}
-                        cy={p.y}
+                        cx={Number.isFinite(p.x) ? p.x : paddingX}
+                        cy={Number.isFinite(p.y) ? p.y : chartHeight / 2}
                         r="4"
                         className="fill-indigo-600 stroke-white stroke-2"
                       />
@@ -376,7 +387,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                     {wellbeingPts.map((p, i) => (
                       <text
                         key={`lbl-${i}`}
-                        x={p.x}
+                        x={Number.isFinite(p.x) ? p.x : paddingX}
                         y={chartHeight - 6}
                         fontSize="11"
                         fill="#64748b"

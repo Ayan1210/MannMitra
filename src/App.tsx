@@ -9,9 +9,12 @@ import {
   updateConsentSettings,
   fetchCounselorActions,
   logCounselorAction,
+  loginCounselor,
+  loginAdmin,
   authStorage,
 } from './lib/api';
 import { Navbar } from './components/Navbar';
+import { DashboardRoleSelector } from './components/Dashboard/DashboardRoleSelector';
 import { StudentDashboard } from './components/StudentView/StudentDashboard';
 import { StudentCheckInModal } from './components/StudentView/StudentCheckInModal';
 import { RoleAuthModal } from './components/Auth/RoleAuthModal';
@@ -22,7 +25,7 @@ import { AaravStoryWalkthrough } from './components/StoryMode/AaravStoryWalkthro
 import { EthicalFrameworkModal } from './components/EthicalSafeguards/EthicalFrameworkModal';
 
 export default function App() {
-  const [currentRole, setCurrentRole] = useState<Role>('story_mode');
+  const [currentRole, setCurrentRole] = useState<Role>('student');
   const [students, setStudents] = useState<StudentProfile[]>(INITIAL_STUDENTS);
   const [activeStudentId, setActiveStudentId] = useState<string>('stu-1024');
   const [authSession, setAuthSession] = useState<AuthSessionUser | null>(null);
@@ -271,6 +274,46 @@ export default function App() {
     });
   };
 
+  // Quick authorization helper for evaluation / instant role switching
+  const handleQuickAuthRole = async (targetRole: 'counselor' | 'admin') => {
+    try {
+      if (targetRole === 'counselor') {
+        const { user, token } = await loginCounselor({
+          email: 'counselor.sharma@campus.edu',
+          password: 'counselor123',
+        });
+        handleAuthSuccess({ role: 'counselor', profile: user, token });
+      } else if (targetRole === 'admin') {
+        const { user, token } = await loginAdmin({
+          email: 'admin@campus.edu',
+          password: 'admin123',
+        });
+        handleAuthSuccess({ role: 'admin', profile: user, token });
+      }
+    } catch (err) {
+      console.warn('Quick demo login fallback:', err);
+    }
+  };
+
+  const handleQuickAuthenticateCredentials = async (
+    role: 'counselor' | 'admin',
+    email: string,
+    pass: string
+  ) => {
+    try {
+      if (role === 'counselor') {
+        const { user, token } = await loginCounselor({ email, password: pass });
+        handleAuthSuccess({ role: 'counselor', profile: user, token });
+      } else if (role === 'admin') {
+        const { user, token } = await loginAdmin({ email, password: pass });
+        handleAuthSuccess({ role: 'admin', profile: user, token });
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      handleOpenAuth(role);
+    }
+  };
+
   // Role Access Checks
   const isCounselorAuthorized = authSession?.role === 'counselor';
   const isAdminAuthorized = authSession?.role === 'admin';
@@ -290,6 +333,15 @@ export default function App() {
         onLogout={handleLogout}
       />
 
+      {/* Role Selection & Dashboard Perspective Switcher */}
+      <DashboardRoleSelector
+        currentRole={currentRole}
+        onSelectRole={setCurrentRole}
+        currentSession={authSession}
+        onQuickAuth={handleQuickAuthRole}
+        unreadAlertCount={unreadAlerts}
+      />
+
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6">
         {currentRole === 'story_mode' && (
@@ -298,7 +350,7 @@ export default function App() {
               if (isCounselorAuthorized) {
                 setCurrentRole('counselor');
               } else {
-                handleOpenAuth('counselor');
+                handleQuickAuthRole('counselor');
               }
             }}
             onSwitchToStudent={() => setCurrentRole('student')}
@@ -328,6 +380,7 @@ export default function App() {
               attemptedRole="counselor"
               currentSession={authSession}
               onOpenLoginModal={(role) => handleOpenAuth(role)}
+              onQuickAuthenticate={handleQuickAuthenticateCredentials}
               onReturnToStudent={() => setCurrentRole('student')}
             />
           )
@@ -341,6 +394,7 @@ export default function App() {
               attemptedRole="admin"
               currentSession={authSession}
               onOpenLoginModal={(role) => handleOpenAuth(role)}
+              onQuickAuthenticate={handleQuickAuthenticateCredentials}
               onReturnToStudent={() => setCurrentRole('student')}
             />
           )

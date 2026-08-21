@@ -99,24 +99,29 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const paddingY = 25;
 
   const getChartPoints = (metric: typeof selectedChartMetric) => {
+    if (!checkIns || checkIns.length === 0) return [];
     return checkIns.map((ck, i) => {
-      const x = paddingX + (i / Math.max(1, maxWeeks - 1)) * (chartWidth - paddingX * 2);
+      const rawX = paddingX + (i / Math.max(1, maxWeeks - 1)) * (chartWidth - paddingX * 2);
+      const x = Number.isFinite(rawX) ? rawX : paddingX;
       let val = 3;
       if (metric === 'composite') {
-        val = calculateCompositeScore(ck) / 20; // scale 0-100 to 0-5
+        const comp = calculateCompositeScore(ck);
+        val = Number.isFinite(comp) ? comp / 20 : 3; // scale 0-100 to 0-5
       } else if (metric === 'wellbeing') {
-        val = ck.overallWellbeing;
+        val = typeof ck.overallWellbeing === 'number' && Number.isFinite(ck.overallWellbeing) ? ck.overallWellbeing : 3;
       } else if (metric === 'stress') {
-        val = ck.academicStress;
+        val = typeof ck.academicStress === 'number' && Number.isFinite(ck.academicStress) ? ck.academicStress : 3;
       } else if (metric === 'sleep') {
-        val = ck.sleepQuality;
+        val = typeof ck.sleepQuality === 'number' && Number.isFinite(ck.sleepQuality) ? ck.sleepQuality : 3;
       } else if (metric === 'energy') {
-        val = ck.energyLevel;
+        val = typeof ck.energyLevel === 'number' && Number.isFinite(ck.energyLevel) ? ck.energyLevel : 3;
       }
 
+      const safeVal = Math.max(1, Math.min(5, Number.isFinite(val) ? val : 3));
       // Invert Y because SVG top is 0
-      const y = chartHeight - paddingY - ((val - 1) / 4) * (chartHeight - paddingY * 2);
-      return { x, y, val, week: ck.weekNumber, date: ck.date };
+      const rawY = chartHeight - paddingY - ((safeVal - 1) / 4) * (chartHeight - paddingY * 2);
+      const y = Number.isFinite(rawY) ? rawY : chartHeight / 2;
+      return { x, y, val: safeVal, week: ck.weekNumber ?? (i + 1), date: ck.date };
     });
   };
 
@@ -127,6 +132,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           idx === 0 ? `M ${curr.x} ${curr.y}` : `${acc} L ${curr.x} ${curr.y}`,
         ''
       )
+    : points.length === 1
+    ? `M ${points[0].x} ${points[0].y}`
     : '';
 
   return (
@@ -333,43 +340,47 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               )}
 
               {/* Data Points */}
-              {points.map((pt, idx) => (
-                <g key={idx} className="cursor-pointer group">
-                  <circle
-                    cx={pt.x}
-                    cy={pt.y}
-                    r="6"
-                    className={`${
-                      selectedChartMetric === 'stress'
-                        ? 'fill-amber-500 stroke-white'
-                        : 'fill-emerald-600 stroke-white'
-                    } stroke-2 transition-transform group-hover:scale-125`}
-                  />
-                  {/* Tooltip on hover */}
-                  <text
-                    x={pt.x}
-                    y={chartHeight - 6}
-                    fontSize="11"
-                    fill="#64748b"
-                    textAnchor="middle"
-                    fontWeight="600"
-                  >
-                    Week {pt.week}
-                  </text>
-                  <text
-                    x={pt.x}
-                    y={pt.y - 12}
-                    fontSize="11"
-                    fill="#1e293b"
-                    textAnchor="middle"
-                    fontWeight="bold"
-                  >
-                    {selectedChartMetric === 'composite'
-                      ? `${Math.round(pt.val * 20)}%`
-                      : `${pt.val}/5`}
-                  </text>
-                </g>
-              ))}
+              {points.map((pt, idx) => {
+                const safeX = Number.isFinite(pt.x) ? pt.x : paddingX;
+                const safeY = Number.isFinite(pt.y) ? pt.y : chartHeight / 2;
+                return (
+                  <g key={idx} className="cursor-pointer group">
+                    <circle
+                      cx={safeX}
+                      cy={safeY}
+                      r="6"
+                      className={`${
+                        selectedChartMetric === 'stress'
+                          ? 'fill-amber-500 stroke-white'
+                          : 'fill-emerald-600 stroke-white'
+                      } stroke-2 transition-transform group-hover:scale-125`}
+                    />
+                    {/* Tooltip on hover */}
+                    <text
+                      x={safeX}
+                      y={chartHeight - 6}
+                      fontSize="11"
+                      fill="#64748b"
+                      textAnchor="middle"
+                      fontWeight="600"
+                    >
+                      Week {pt.week}
+                    </text>
+                    <text
+                      x={safeX}
+                      y={Math.max(12, safeY - 12)}
+                      fontSize="11"
+                      fill="#1e293b"
+                      textAnchor="middle"
+                      fontWeight="bold"
+                    >
+                      {selectedChartMetric === 'composite'
+                        ? `${Math.round(pt.val * 20)}%`
+                        : `${pt.val}/5`}
+                    </text>
+                  </g>
+                );
+              })}
             </svg>
 
             {/* Subtext trend interpretation */}

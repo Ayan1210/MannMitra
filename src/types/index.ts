@@ -1,5 +1,22 @@
 export type Role = 'student' | 'counselor' | 'admin' | 'story_mode';
 
+export type UserRole = 'student' | 'counselor' | 'admin';
+
+export interface StaffProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: 'counselor' | 'admin';
+  title: string;
+  department?: string;
+  avatar: string;
+}
+
+export type AuthSessionUser =
+  | { role: 'student'; profile: StudentProfile; token: string }
+  | { role: 'counselor'; profile: StaffProfile; token: string }
+  | { role: 'admin'; profile: StaffProfile; token: string };
+
 export type WellBeingStatus = 'stable' | 'monitor' | 'check_in_recommended';
 
 export type TrendDirection = 'improving' | 'stable' | 'declining';

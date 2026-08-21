@@ -612,6 +612,22 @@ app.post('/api/counselor/actions', async (req, res) => {
   }
 });
 
+function safeParseGeminiJson(raw: string | undefined): any {
+  if (!raw) return null;
+  let text = raw.trim();
+  if (text.startsWith('```json')) {
+    text = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
+  } else if (text.startsWith('```')) {
+    text = text.replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+  }
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.warn('Failed to parse Gemini JSON output:', text.slice(0, 100));
+    return null;
+  }
+}
+
 // 8. Voice Speech Reflection & Processing ("speak")
 app.post('/api/voice/process-speech', async (req, res) => {
   try {
@@ -647,14 +663,14 @@ Output JSON only with keys:
           },
         });
 
-        if (response.text) {
-          const parsed = JSON.parse(response.text);
+        const parsed = safeParseGeminiJson(response.text);
+        if (parsed) {
           return res.json({
             transcript,
-            sentiment: parsed.sentiment,
-            supportiveReflection: parsed.supportiveReflection,
-            suggestedRatings: parsed.suggestedRatings,
-            primaryTag: parsed.primaryTag,
+            sentiment: parsed.sentiment || 'Reflective state',
+            supportiveReflection: parsed.supportiveReflection || 'Thank you for sharing your thoughts.',
+            suggestedRatings: parsed.suggestedRatings || { overallWellbeing: 3, academicStress: 3, sleepQuality: 3, energyLevel: 3 },
+            primaryTag: parsed.primaryTag || 'Routine',
           });
         }
       } catch (geminiErr) {
@@ -762,19 +778,19 @@ Generate the structured counselor synthesis.`;
       },
     });
 
-    if (response.text) {
-      const parsed = JSON.parse(response.text);
+    const parsed = safeParseGeminiJson(response.text);
+    if (parsed && parsed.summary) {
       return res.json({
         summary: parsed.summary,
-        keyObservations: parsed.keyObservations,
-        suggestedOpeners: parsed.suggestedOpeners,
+        keyObservations: parsed.keyObservations || analysis.ruleTriggers || [],
+        suggestedOpeners: parsed.suggestedOpeners || [],
         disclaimer:
           'AI-generated briefing for qualified counselor review only. This is an early-warning communication aid, NOT a clinical or psychiatric diagnosis.',
         generatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       });
     }
 
-    return res.status(500).json({ error: 'No output received from Gemini API' });
+    return res.status(500).json({ error: 'Could not structure counselor synthesis from AI output' });
   } catch (err: any) {
     console.error('Error generating counselor summary:', err);
     return res.status(500).json({ error: err?.message || 'Internal Server Error' });

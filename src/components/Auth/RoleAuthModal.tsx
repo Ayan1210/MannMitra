@@ -378,19 +378,19 @@ export const RoleAuthModal: React.FC<RoleAuthModalProps> = ({
                         }}
                         className="p-1.5 bg-white hover:bg-emerald-100/50 rounded-lg border border-emerald-200 text-left transition-colors"
                       >
-                        <div className="font-semibold text-slate-800 text-[11px] truncate">Priya (Biotech)</div>
-                        <div className="text-[10px] text-amber-600 font-mono">STU-2048</div>
+                        <div className="font-semibold text-slate-800 text-[11px] truncate">Priya (BCA)</div>
+                        <div className="text-[10px] text-amber-600 font-mono">STU-1182</div>
                       </button>
                       <button
                         type="button"
                         onClick={() => {
-                          setStudentEmail('rohan.mehta@campus.edu');
+                          setStudentEmail('rohan.verma@campus.edu');
                           setStudentPassword('password123');
                         }}
                         className="p-1.5 bg-white hover:bg-emerald-100/50 rounded-lg border border-emerald-200 text-left transition-colors"
                       >
-                        <div className="font-semibold text-slate-800 text-[11px] truncate">Rohan (EE)</div>
-                        <div className="text-[10px] text-emerald-600 font-mono">STU-3096</div>
+                        <div className="font-semibold text-slate-800 text-[11px] truncate">Rohan (MBA)</div>
+                        <div className="text-[10px] text-emerald-600 font-mono">STU-1231</div>
                       </button>
                     </div>
                   </div>

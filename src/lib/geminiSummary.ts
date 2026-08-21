@@ -24,18 +24,25 @@ export async function generateCounselorAISummary(
     });
 
     if (response.ok) {
-      const data = await response.json();
-      if (data && data.summary) {
-        return {
-          summary: data.summary,
-          keyObservations: data.keyObservations || analysis.ruleTriggers,
-          suggestedOpeners: data.suggestedOpeners || [
-            `"Hi ${student.name.split(' ')[0]}, I noticed your recent schedule has been heavy with assignments. How are you holding up with your sleep routines this week?"`,
-            `"Hey ${student.name.split(' ')[0]}, just checking in to see how the transition into this semester's project phase is going for you."`,
-          ],
-          disclaimer,
-          generatedAt: data.generatedAt || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
+      const text = await response.text();
+      if (text && text.trim().startsWith('{')) {
+        try {
+          const data = JSON.parse(text);
+          if (data && data.summary) {
+            return {
+              summary: data.summary,
+              keyObservations: data.keyObservations || analysis.ruleTriggers,
+              suggestedOpeners: data.suggestedOpeners || [
+                `"Hi ${student.name.split(' ')[0]}, I noticed your recent schedule has been heavy with assignments. How are you holding up with your sleep routines this week?"`,
+                `"Hey ${student.name.split(' ')[0]}, just checking in to see how the transition into this semester's project phase is going for you."`,
+              ],
+              disclaimer,
+              generatedAt: data.generatedAt || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            };
+          }
+        } catch {
+          // Fall through to deterministic synthesizer
+        }
       }
     }
   } catch (err) {

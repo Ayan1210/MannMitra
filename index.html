@@ -3,12 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
-    <meta name="description" content="An application built with Google AI Studio." />
-    <meta property="og:title" content="My Google AI Studio App" />
-    <meta property="og:description" content="An application built with Google AI Studio." />
+    <title>MannMitra - Student Wellbeing Early-Warning System</title>
+    <meta name="description" content="A consent-based, privacy-first student wellbeing early-warning platform." />
+    <meta property="og:title" content="MannMitra - Student Wellbeing Early-Warning System" />
+    <meta property="og:description" content="A consent-based, privacy-first student wellbeing early-warning platform." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      (function() {
+        try {
+          var origFetch = typeof window !== 'undefined' && window.fetch ? window.fetch.bind(window) : undefined;
+          var currentFetch = origFetch;
+          if (typeof window !== 'undefined') {
+            Object.defineProperty(window, 'fetch', {
+              get: function() {
+                return currentFetch;
+              },
+              set: function(newFetch) {
+                currentFetch = newFetch;
+              },
+              configurable: true,
+              enumerable: true
+            });
+          }
+        } catch (err) {
+          // Fallback if property is strictly sealed
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

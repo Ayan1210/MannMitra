@@ -40,6 +40,7 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
 
   // Speech to text inside check-in
   const [isListeningSpeech, setIsListeningSpeech] = useState<boolean>(false);
+  const [speechWarning, setSpeechWarning] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
@@ -97,7 +98,8 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
 
   const toggleSpeechDictation = () => {
     if (!recognitionRef.current) {
-      alert('Speech recognition is not supported in this browser window. You can type directly.');
+      setSpeechWarning('Speech recognition is not supported in this browser window. Please type directly.');
+      setTimeout(() => setSpeechWarning(null), 3500);
       return;
     }
 
@@ -106,6 +108,7 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
       setIsListeningSpeech(false);
     } else {
       try {
+        setSpeechWarning(null);
         recognitionRef.current.start();
         setIsListeningSpeech(true);
       } catch (err) {
@@ -461,6 +464,11 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
                 <span>{isPrivateNote ? 'Private: Only visible to me' : 'Shared with counselor'}</span>
               </button>
             </div>
+            {speechWarning && (
+              <div className="mb-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1">
+                {speechWarning}
+              </div>
+            )}
             <textarea
               rows={3}
               value={personalReflection}

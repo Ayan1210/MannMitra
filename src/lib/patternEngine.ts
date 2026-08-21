@@ -12,12 +12,21 @@ import { CheckInRecord, PatternAnalysisResult, WellBeingStatus, TrendDirection }
  * - Social Connection (weight 10%)
  */
 export function calculateCompositeScore(checkIn: CheckInRecord): number {
-  const normWellbeing = (checkIn.overallWellbeing - 1) / 4; // 0 to 1
-  const normStressInverted = (5 - checkIn.academicStress) / 4; // 0 (extreme stress) to 1 (low stress)
-  const normSleep = (checkIn.sleepQuality - 1) / 4;
-  const normEnergy = (checkIn.energyLevel - 1) / 4;
-  const normConcentration = (checkIn.concentration - 1) / 4;
-  const normSocial = (checkIn.socialConnection - 1) / 4;
+  if (!checkIn) return 50;
+
+  const ow = typeof checkIn.overallWellbeing === 'number' && !isNaN(checkIn.overallWellbeing) ? checkIn.overallWellbeing : 3;
+  const as = typeof checkIn.academicStress === 'number' && !isNaN(checkIn.academicStress) ? checkIn.academicStress : 3;
+  const sq = typeof checkIn.sleepQuality === 'number' && !isNaN(checkIn.sleepQuality) ? checkIn.sleepQuality : 3;
+  const el = typeof checkIn.energyLevel === 'number' && !isNaN(checkIn.energyLevel) ? checkIn.energyLevel : 3;
+  const cn = typeof checkIn.concentration === 'number' && !isNaN(checkIn.concentration) ? checkIn.concentration : 3;
+  const sc = typeof checkIn.socialConnection === 'number' && !isNaN(checkIn.socialConnection) ? checkIn.socialConnection : 3;
+
+  const normWellbeing = (Math.max(1, Math.min(5, ow)) - 1) / 4; // 0 to 1
+  const normStressInverted = (5 - Math.max(1, Math.min(5, as))) / 4; // 0 (extreme stress) to 1 (low stress)
+  const normSleep = (Math.max(1, Math.min(5, sq)) - 1) / 4;
+  const normEnergy = (Math.max(1, Math.min(5, el)) - 1) / 4;
+  const normConcentration = (Math.max(1, Math.min(5, cn)) - 1) / 4;
+  const normSocial = (Math.max(1, Math.min(5, sc)) - 1) / 4;
 
   const composite = (
     normWellbeing * 0.25 +
@@ -28,7 +37,8 @@ export function calculateCompositeScore(checkIn: CheckInRecord): number {
     normSocial * 0.10
   ) * 100;
 
-  return Math.round(composite);
+  const rounded = Math.round(composite);
+  return Number.isFinite(rounded) ? Math.max(0, Math.min(100, rounded)) : 50;
 }
 
 /**

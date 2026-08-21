@@ -55,8 +55,15 @@ function formatStudentProfile(row: any, checkIns: any[] = []) {
 // -------------------------------------------------------------
 // Auth Middleware
 // -------------------------------------------------------------
+interface AuthUserToken {
+  id: string;
+  email: string;
+  role: 'student' | 'counselor' | 'admin';
+  name?: string;
+}
+
 interface AuthRequest extends Request {
-  user?: { studentId: string; email: string };
+  user?: AuthUserToken;
 }
 
 function authenticateToken(req: AuthRequest, res: Response, next: Function) {
@@ -67,13 +74,24 @@ function authenticateToken(req: AuthRequest, res: Response, next: Function) {
     return res.status(401).json({ error: 'Authentication token required' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
+  jwt.verify(token, JWT_SECRET, (err: any, decoded: any) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
-    req.user = user;
+    req.user = decoded;
     next();
   });
+}
+
+function requireRole(allowedRoles: ('student' | 'counselor' | 'admin')[]) {
+  return (req: AuthRequest, res: Response, next: Function) => {
+    if (!req.user || !allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        error: `Access Denied: Requires authorized [${allowedRoles.join(', ')}] privileges.`,
+      });
+    }
+    next();
+  };
 }
 
 // -------------------------------------------------------------
@@ -85,8 +103,8 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', engine: 'Node + Express + SQLite3', timestamp: new Date().toISOString() });
 });
 
-// 1. Register new Student
-app.post('/api/auth/register', async (req, res) => {
+// 1. Student Registration
+const handleStudentRegister = async (req: Request, res: Response) => {
   try {
     const { name, email, password, department, year, consent } = req.body;
 
@@ -159,13 +177,15 @@ app.post('/api/auth/register', async (req, res) => {
     const studentProfile = formatStudentProfile(newStudentRow, checkIns);
 
     const token = jwt.sign(
-      { studentId: studentProfile.id, email: studentProfile.email },
+      { id: studentProfile.id, email: studentProfile.email, role: 'student', name: studentProfile.name },
       JWT_SECRET,
       { expiresIn: '30d' }
     );
 
     return res.status(201).json({
-      message: 'Account created successfully',
+      message: 'Student account created successfully',
+      role: 'student',
+      user: studentProfile,
       student: studentProfile,
       token,
     });
@@ -173,10 +193,13 @@ app.post('/api/auth/register', async (req, res) => {
     console.error('Error during student registration:', err);
     return res.status(500).json({ error: err?.message || 'Failed to create student account' });
   }
-});
+};
+
+app.post('/api/auth/register', handleStudentRegister);
+app.post('/api/auth/student/register', handleStudentRegister);
 
 // 2. Student Login
-app.post('/api/auth/login', async (req, res) => {
+const handleStudentLogin = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -185,44 +208,215 @@ app.post('/api/auth/login', async (req, res) => {
 
     const studentRow = await dbGet('SELECT * FROM students WHERE LOWER(email) = ?', [email.toLowerCase().trim()]);
     if (!studentRow) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({ error: 'Invalid student email or password.' });
     }
 
     const isValid = await bcrypt.compare(password, studentRow.password_hash);
     if (!isValid) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({ error: 'Invalid student email or password.' });
     }
 
     const checkIns = await dbAll('SELECT * FROM check_ins WHERE student_id = ? ORDER BY week_number ASC', [studentRow.id]);
     const studentProfile = formatStudentProfile(studentRow, checkIns);
 
     const token = jwt.sign(
-      { studentId: studentProfile.id, email: studentProfile.email },
+      { id: studentProfile.id, email: studentProfile.email, role: 'student', name: studentProfile.name },
       JWT_SECRET,
       { expiresIn: '30d' }
     );
 
     return res.json({
-      message: 'Login successful',
+      message: 'Student login successful',
+      role: 'student',
+      user: studentProfile,
       student: studentProfile,
       token,
     });
   } catch (err: any) {
-    console.error('Error during login:', err);
-    return res.status(500).json({ error: 'Login process failed' });
+    console.error('Error during student login:', err);
+    return res.status(500).json({ error: 'Student login failed' });
+  }
+};
+
+app.post('/api/auth/login', handleStudentLogin);
+app.post('/api/auth/student/login', handleStudentLogin);
+
+// 3. Counselor Login (Dedicated endpoint)
+app.post('/api/auth/counselor/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Counselor email and password are required' });
+    }
+
+    const staffRow = await dbGet('SELECT * FROM staff_users WHERE LOWER(email) = ?', [email.toLowerCase().trim()]);
+    if (!staffRow) {
+      // Check if user is a student trying to enter counselor portal
+      const studentMatch = await dbGet('SELECT id FROM students WHERE LOWER(email) = ?', [email.toLowerCase().trim()]);
+      if (studentMatch) {
+        return res.status(403).json({
+          error: 'Access Denied: This is a student account. Students are not authorized to access the Counselor portal.',
+        });
+      }
+      return res.status(401).json({ error: 'Invalid counselor credentials' });
+    }
+
+    if (staffRow.role !== 'counselor') {
+      return res.status(403).json({
+        error: 'Access Denied: This account is not authorized as a Counselor.',
+      });
+    }
+
+    const isValid = await bcrypt.compare(password, staffRow.password_hash);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid counselor credentials' });
+    }
+
+    const staffProfile = {
+      id: staffRow.id,
+      name: staffRow.name,
+      email: staffRow.email,
+      role: staffRow.role,
+      title: staffRow.title,
+      department: staffRow.department,
+      avatar: staffRow.avatar,
+    };
+
+    const token = jwt.sign(
+      { id: staffRow.id, email: staffRow.email, role: 'counselor', name: staffRow.name },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return res.json({
+      message: 'Counselor authentication successful',
+      role: 'counselor',
+      user: staffProfile,
+      token,
+    });
+  } catch (err: any) {
+    console.error('Error during counselor login:', err);
+    return res.status(500).json({ error: 'Counselor authentication failed' });
   }
 });
 
-// 3. Get Authenticated User Profile
+// 4. Admin Login (Dedicated endpoint)
+app.post('/api/auth/admin/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Administrator email and password are required' });
+    }
+
+    const staffRow = await dbGet('SELECT * FROM staff_users WHERE LOWER(email) = ?', [email.toLowerCase().trim()]);
+    if (!staffRow) {
+      // Check if user is a student trying to enter admin portal
+      const studentMatch = await dbGet('SELECT id FROM students WHERE LOWER(email) = ?', [email.toLowerCase().trim()]);
+      if (studentMatch) {
+        return res.status(403).json({
+          error: 'Access Denied: This is a student account. Students are not authorized to access Institutional Admin controls.',
+        });
+      }
+      return res.status(401).json({ error: 'Invalid administrator credentials' });
+    }
+
+    if (staffRow.role !== 'admin') {
+      return res.status(403).json({
+        error: 'Access Denied: This account is not authorized as an Administrator.',
+      });
+    }
+
+    const isValid = await bcrypt.compare(password, staffRow.password_hash);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid administrator credentials' });
+    }
+
+    const adminProfile = {
+      id: staffRow.id,
+      name: staffRow.name,
+      email: staffRow.email,
+      role: staffRow.role,
+      title: staffRow.title,
+      department: staffRow.department,
+      avatar: staffRow.avatar,
+    };
+
+    const token = jwt.sign(
+      { id: staffRow.id, email: staffRow.email, role: 'admin', name: staffRow.name },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return res.json({
+      message: 'Administrator authentication successful',
+      role: 'admin',
+      user: adminProfile,
+      token,
+    });
+  } catch (err: any) {
+    console.error('Error during admin login:', err);
+    return res.status(500).json({ error: 'Administrator authentication failed' });
+  }
+});
+
+// 5. Get Authenticated Session Profile
+app.get('/api/auth/session', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const role = req.user?.role;
+    const userId = req.user?.id;
+
+    if (role === 'student') {
+      const studentRow = await dbGet('SELECT * FROM students WHERE id = ?', [userId]);
+      if (!studentRow) {
+        return res.status(404).json({ error: 'Student account not found' });
+      }
+      const checkIns = await dbAll('SELECT * FROM check_ins WHERE student_id = ? ORDER BY week_number ASC', [userId]);
+      const studentProfile = formatStudentProfile(studentRow, checkIns);
+      return res.json({
+        authenticated: true,
+        role: 'student',
+        user: studentProfile,
+        student: studentProfile,
+      });
+    }
+
+    if (role === 'counselor' || role === 'admin') {
+      const staffRow = await dbGet('SELECT * FROM staff_users WHERE id = ?', [userId]);
+      if (!staffRow) {
+        return res.status(404).json({ error: 'Staff account not found' });
+      }
+      const staffProfile = {
+        id: staffRow.id,
+        name: staffRow.name,
+        email: staffRow.email,
+        role: staffRow.role,
+        title: staffRow.title,
+        department: staffRow.department,
+        avatar: staffRow.avatar,
+      };
+      return res.json({
+        authenticated: true,
+        role: staffRow.role,
+        user: staffProfile,
+      });
+    }
+
+    return res.status(400).json({ error: 'Unknown role in session token' });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to verify session' });
+  }
+});
+
+// Legacy /me route
 app.get('/api/auth/me', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const studentId = req.user?.studentId;
-    const studentRow = await dbGet('SELECT * FROM students WHERE id = ?', [studentId]);
+    const userId = req.user?.id;
+    const studentRow = await dbGet('SELECT * FROM students WHERE id = ?', [userId]);
     if (!studentRow) {
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    const checkIns = await dbAll('SELECT * FROM check_ins WHERE student_id = ? ORDER BY week_number ASC', [studentId]);
+    const checkIns = await dbAll('SELECT * FROM check_ins WHERE student_id = ? ORDER BY week_number ASC', [userId]);
     const studentProfile = formatStudentProfile(studentRow, checkIns);
 
     return res.json({ student: studentProfile });
@@ -418,6 +612,22 @@ app.post('/api/counselor/actions', async (req, res) => {
   }
 });
 
+function safeParseGeminiJson(raw: string | undefined): any {
+  if (!raw) return null;
+  let text = raw.trim();
+  if (text.startsWith('```json')) {
+    text = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
+  } else if (text.startsWith('```')) {
+    text = text.replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+  }
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.warn('Failed to parse Gemini JSON output:', text.slice(0, 100));
+    return null;
+  }
+}
+
 // 8. Voice Speech Reflection & Processing ("speak")
 app.post('/api/voice/process-speech', async (req, res) => {
   try {
@@ -453,14 +663,14 @@ Output JSON only with keys:
           },
         });
 
-        if (response.text) {
-          const parsed = JSON.parse(response.text);
+        const parsed = safeParseGeminiJson(response.text);
+        if (parsed) {
           return res.json({
             transcript,
-            sentiment: parsed.sentiment,
-            supportiveReflection: parsed.supportiveReflection,
-            suggestedRatings: parsed.suggestedRatings,
-            primaryTag: parsed.primaryTag,
+            sentiment: parsed.sentiment || 'Reflective state',
+            supportiveReflection: parsed.supportiveReflection || 'Thank you for sharing your thoughts.',
+            suggestedRatings: parsed.suggestedRatings || { overallWellbeing: 3, academicStress: 3, sleepQuality: 3, energyLevel: 3 },
+            primaryTag: parsed.primaryTag || 'Routine',
           });
         }
       } catch (geminiErr) {
@@ -568,19 +778,19 @@ Generate the structured counselor synthesis.`;
       },
     });
 
-    if (response.text) {
-      const parsed = JSON.parse(response.text);
+    const parsed = safeParseGeminiJson(response.text);
+    if (parsed && parsed.summary) {
       return res.json({
         summary: parsed.summary,
-        keyObservations: parsed.keyObservations,
-        suggestedOpeners: parsed.suggestedOpeners,
+        keyObservations: parsed.keyObservations || analysis.ruleTriggers || [],
+        suggestedOpeners: parsed.suggestedOpeners || [],
         disclaimer:
           'AI-generated briefing for qualified counselor review only. This is an early-warning communication aid, NOT a clinical or psychiatric diagnosis.',
         generatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       });
     }
 
-    return res.status(500).json({ error: 'No output received from Gemini API' });
+    return res.status(500).json({ error: 'Could not structure counselor synthesis from AI output' });
   } catch (err: any) {
     console.error('Error generating counselor summary:', err);
     return res.status(500).json({ error: err?.message || 'Internal Server Error' });

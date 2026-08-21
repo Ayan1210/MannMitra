@@ -27,6 +27,17 @@ export interface DBStudent {
   status: string;
 }
 
+export interface DBStaffUser {
+  id: string;
+  name: string;
+  email: string;
+  password_hash: string;
+  role: 'counselor' | 'admin';
+  title: string;
+  department?: string;
+  avatar: string;
+}
+
 export interface DBCheckIn {
   id: string;
   student_id: string;
@@ -67,6 +78,7 @@ export interface DBVoiceReflection {
 
 interface DatabaseSchema {
   students: DBStudent[];
+  staff_users: DBStaffUser[];
   check_ins: DBCheckIn[];
   counselor_actions: DBCounselorAction[];
   voice_reflections: DBVoiceReflection[];
@@ -74,6 +86,7 @@ interface DatabaseSchema {
 
 let inMemoryDB: DatabaseSchema = {
   students: [],
+  staff_users: [],
   check_ins: [],
   counselor_actions: [],
   voice_reflections: [],
@@ -219,6 +232,20 @@ export async function dbRun(sql: string, params: any[] = []): Promise<{ lastID: 
 export async function dbGet<T = any>(sql: string, params: any[] = []): Promise<T | undefined> {
   const normalized = sql.trim().replace(/\s+/g, ' ');
 
+  // SELECT * FROM staff_users WHERE email = ?
+  if (normalized.includes('FROM staff_users WHERE email = ?') || normalized.includes('FROM staff_users WHERE LOWER(email) = ?')) {
+    const targetEmail = String(params[0]).toLowerCase().trim();
+    const found = inMemoryDB.staff_users.find((s) => s.email.toLowerCase() === targetEmail);
+    return found as unknown as T;
+  }
+
+  // SELECT * FROM staff_users WHERE id = ?
+  if (normalized.includes('FROM staff_users WHERE id = ?')) {
+    const targetId = params[0];
+    const found = inMemoryDB.staff_users.find((s) => s.id === targetId);
+    return found as unknown as T;
+  }
+
   // SELECT id FROM students WHERE email = ?
   if (normalized.includes('FROM students WHERE email = ?') || normalized.includes('FROM students WHERE LOWER(email) = ?')) {
     const targetEmail = String(params[0]).toLowerCase().trim();
@@ -243,6 +270,11 @@ export async function dbGet<T = any>(sql: string, params: any[] = []): Promise<T
 
 export async function dbAll<T = any>(sql: string, params: any[] = []): Promise<T[]> {
   const normalized = sql.trim().replace(/\s+/g, ' ');
+
+  // SELECT * FROM staff_users
+  if (normalized.startsWith('SELECT * FROM staff_users')) {
+    return inMemoryDB.staff_users as unknown as T[];
+  }
 
   // SELECT * FROM students
   if (normalized.startsWith('SELECT * FROM students')) {
@@ -277,8 +309,60 @@ export async function initDatabase() {
   console.log('Initializing MannMitra persistent database store at:', DB_FILE);
 
   const loaded = loadFromDisk();
+
+  // If staff_users is missing in previously persisted DB, initialize them
+  if (!inMemoryDB.staff_users || inMemoryDB.staff_users.length === 0) {
+    inMemoryDB.staff_users = [];
+    const counselorHash = await bcrypt.hash('counselor123', 10);
+    const adminHash = await bcrypt.hash('admin123', 10);
+
+    inMemoryDB.staff_users.push(
+      {
+        id: 'csl-1',
+        name: 'Dr. Ananya Sharma',
+        email: 'counselor.sharma@campus.edu',
+        password_hash: counselorHash,
+        role: 'counselor',
+        title: 'Lead Clinical Psychologist & Counselor',
+        department: 'Student Mental Health & Wellness Centre',
+        avatar: 'https://images.unsplash.com/photo-1594824813580-ff6774a3502c?w=150&auto=format&fit=crop&q=80',
+      },
+      {
+        id: 'csl-2',
+        name: 'Dr. Rajesh Verma',
+        email: 'counselor.verma@campus.edu',
+        password_hash: counselorHash,
+        role: 'counselor',
+        title: 'Student Welfare & Academic Stress Specialist',
+        department: 'Counseling & Guidance Division',
+        avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=150&auto=format&fit=crop&q=80',
+      },
+      {
+        id: 'adm-1',
+        name: 'Prof. Meenakshi Sundaram',
+        email: 'admin@campus.edu',
+        password_hash: adminHash,
+        role: 'admin',
+        title: 'Dean of Student Affairs & Institutional Admin',
+        department: 'Office of Dean (Student Affairs)',
+        avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+      },
+      {
+        id: 'adm-2',
+        name: 'Dr. Vikram Malhotra',
+        email: 'director@campus.edu',
+        password_hash: adminHash,
+        role: 'admin',
+        title: 'Campus Director & Institutional Oversight',
+        department: 'Executive Leadership Board',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+      }
+    );
+    persistToDisk();
+  }
+
   if (loaded && inMemoryDB.students.length > 0) {
-    console.log(`Loaded ${inMemoryDB.students.length} students from disk store.`);
+    console.log(`Loaded ${inMemoryDB.students.length} students and ${inMemoryDB.staff_users.length} staff accounts from disk.`);
     return;
   }
 
@@ -341,5 +425,5 @@ export async function initDatabase() {
   });
 
   persistToDisk();
-  console.log(`Database seeded with ${inMemoryDB.students.length} students and ${inMemoryDB.check_ins.length} check-ins.`);
+  console.log(`Database seeded with ${inMemoryDB.students.length} students, ${inMemoryDB.staff_users.length} staff, and ${inMemoryDB.check_ins.length} check-ins.`);
 }

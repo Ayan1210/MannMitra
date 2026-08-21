@@ -1,6 +1,17 @@
 import React from 'react';
-import { ShieldCheck, HeartHandshake, Sparkles, LogIn, UserCircle, LogOut } from 'lucide-react';
-import { Role, StudentProfile } from '../types';
+import {
+  HeartHandshake,
+  Sparkles,
+  LogIn,
+  LogOut,
+  ShieldCheck,
+  GraduationCap,
+  Stethoscope,
+  Building2,
+  PhoneCall,
+  Lock,
+} from 'lucide-react';
+import { Role, StudentProfile, StaffProfile, AuthSessionUser } from '../types';
 
 interface NavbarProps {
   currentRole: Role;
@@ -9,8 +20,9 @@ interface NavbarProps {
   onOpenEthicsModal: () => void;
   unreadAlertCount: number;
   currentStudent?: StudentProfile;
-  onOpenAuthModal?: () => void;
-  onLogout?: () => void;
+  currentSession: AuthSessionUser | null;
+  onOpenAuthModal: (targetRole?: 'student' | 'counselor' | 'admin') => void;
+  onLogout: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -20,16 +32,24 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenEthicsModal,
   unreadAlertCount,
   currentStudent,
+  currentSession,
   onOpenAuthModal,
   onLogout,
 }) => {
+  const isStudentSession = currentSession?.role === 'student';
+  const isCounselorSession = currentSession?.role === 'counselor';
+  const isAdminSession = currentSession?.role === 'admin';
+
   return (
-    <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-xs">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-emerald-100/80 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Logo & Brand */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 via-teal-500 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
+          {/* Brand & Logo */}
+          <div
+            onClick={() => onSelectRole('landing')}
+            className="flex items-center gap-3 cursor-pointer group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 via-teal-500 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-emerald-500/20 group-hover:scale-105 transition-transform">
               <HeartHandshake className="w-6 h-6" />
             </div>
             <div>
@@ -38,121 +58,191 @@ export const Navbar: React.FC<NavbarProps> = ({
                   MannMitra
                 </span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100/80 text-emerald-800 font-medium border border-emerald-200">
-                  मनमित्र • Early Warning
+                  मनमित्र
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 hidden sm:block">
-                Consent-based student wellbeing pattern intelligence
+                Consent-based student wellbeing early-warning system
               </p>
             </div>
           </div>
 
-          {/* Role Navigation Pills */}
-          <div className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 text-xs sm:text-sm font-medium">
+          {/* Center Navigation */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <button
-              onClick={() => onSelectRole('student')}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                currentRole === 'student'
-                  ? 'bg-white text-emerald-700 shadow-xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
+              onClick={() => onSelectRole('landing')}
+              className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
+                currentRole === 'landing'
+                  ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              <span>🎓</span>
-              <span>Student</span>
+              <span>🏠</span>
+              <span>Home</span>
             </button>
 
-            <button
-              onClick={() => onSelectRole('counselor')}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 relative ${
-                currentRole === 'counselor'
-                  ? 'bg-white text-teal-700 shadow-xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <span>🧑‍⚕️</span>
-              <span>Counselor</span>
-              {unreadAlertCount > 0 && (
-                <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500 text-white font-bold animate-pulse">
-                  {unreadAlertCount}
-                </span>
-              )}
-            </button>
+            {/* If authenticated as student */}
+            {isStudentSession && (
+              <button
+                onClick={() => onSelectRole('student')}
+                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
+                  currentRole === 'student'
+                    ? 'bg-emerald-500 text-white font-semibold shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <GraduationCap className="w-4 h-4" />
+                <span>My Check-in Portal</span>
+              </button>
+            )}
 
-            <button
-              onClick={() => onSelectRole('admin')}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                currentRole === 'admin'
-                  ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <span>🏛️</span>
-              <span className="hidden md:inline">Admin</span>
-              <span className="md:hidden">Stats</span>
-            </button>
+            {/* If authenticated as counselor */}
+            {isCounselorSession && (
+              <button
+                onClick={() => onSelectRole('counselor')}
+                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
+                  currentRole === 'counselor'
+                    ? 'bg-teal-600 text-white font-semibold shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <Stethoscope className="w-4 h-4" />
+                <span>Counselor Triage</span>
+                {unreadAlertCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500 text-white font-bold animate-pulse">
+                    {unreadAlertCount}
+                  </span>
+                )}
+              </button>
+            )}
 
+            {/* If authenticated as admin */}
+            {isAdminSession && (
+              <button
+                onClick={() => onSelectRole('admin')}
+                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
+                  currentRole === 'admin'
+                    ? 'bg-indigo-600 text-white font-semibold shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <Building2 className="w-4 h-4" />
+                <span>Institutional Analytics</span>
+              </button>
+            )}
+
+            {/* Interactive Story Walkthrough */}
             <button
               onClick={() => onSelectRole('story_mode')}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
                 currentRole === 'story_mode'
                   ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs font-semibold'
-                  : 'text-amber-700 hover:text-amber-900'
+                  : 'text-amber-800 hover:text-amber-950 bg-amber-50/70 hover:bg-amber-100 border border-amber-200/80'
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">"Meet Aarav"</span> Demo
+              <Sparkles className="w-3.5 h-3.5 text-amber-500 group-hover:rotate-12 transition-transform" />
+              <span className="hidden sm:inline">"Meet Aarav"</span>
+              <span className="sm:hidden">Story</span>
             </button>
           </div>
 
           {/* Right Action Buttons */}
           <div className="flex items-center gap-2">
-            {/* Student Auth status indicator in student role */}
-            {currentRole === 'student' && currentStudent && onOpenAuthModal && (
-              <div className="hidden sm:flex items-center gap-2 pr-1">
+            {/* When Logged In */}
+            {currentSession ? (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 py-1 px-2.5 rounded-xl bg-slate-100 border border-slate-200 text-xs">
+                  {currentSession.role === 'student' && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-emerald-700 text-white flex items-center justify-center font-bold text-[10px]">
+                        🎓
+                      </div>
+                      <div className="text-left leading-tight">
+                        <div className="font-semibold text-slate-800 text-[11px]">
+                          {(currentSession.profile as StudentProfile).name}
+                        </div>
+                        <div className="text-[10px] text-emerald-700 font-mono">
+                          {(currentSession.profile as StudentProfile).anonymousCode}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {currentSession.role === 'counselor' && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-teal-700 text-white flex items-center justify-center font-bold text-[10px]">
+                        🧑‍⚕️
+                      </div>
+                      <div className="text-left leading-tight">
+                        <div className="font-semibold text-slate-800 text-[11px]">
+                          {(currentSession.profile as StaffProfile).name}
+                        </div>
+                        <div className="text-[10px] text-teal-700 font-medium">Counselor</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {currentSession.role === 'admin' && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-indigo-700 text-white flex items-center justify-center font-bold text-[10px]">
+                        🏛️
+                      </div>
+                      <div className="text-left leading-tight">
+                        <div className="font-semibold text-slate-800 text-[11px]">
+                          {(currentSession.profile as StaffProfile).name}
+                        </div>
+                        <div className="text-[10px] text-indigo-700 font-medium">Administrator</div>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={onLogout}
+                    title="Log Out"
+                    className="p-1 text-slate-400 hover:text-rose-600 rounded-md hover:bg-slate-200 transition-colors ml-1"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {currentSession.role === 'student' && (
+                  <button
+                    onClick={onOpenCheckIn}
+                    className="hidden sm:flex px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-all items-center gap-1"
+                  >
+                    <span>+ Check-in</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              /* When Not Logged In */
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={onOpenAuthModal}
-                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors border border-slate-200/80"
-                  title="Switch or create student account"
+                  onClick={() => {
+                    const el = document.getElementById('login-portals');
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth' });
+                    } else {
+                      onSelectRole('landing');
+                    }
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold shadow-sm shadow-emerald-600/20 transition-all flex items-center gap-1.5"
                 >
-                  <img
-                    src={currentStudent.avatar}
-                    alt={currentStudent.name}
-                    className="w-5 h-5 rounded-full object-cover"
-                  />
-                  <span>{currentStudent.name.split(' ')[0]}</span>
-                  <span className="text-[10px] text-slate-500 font-mono">({currentStudent.anonymousCode})</span>
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Sign In / Portals</span>
                 </button>
               </div>
             )}
 
-            {currentRole === 'student' && onOpenAuthModal && (
-              <button
-                onClick={onOpenAuthModal}
-                className="px-2.5 py-1.5 text-xs rounded-lg text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1.5 font-medium sm:hidden"
-                title="Login / Create Account"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Account</span>
-              </button>
-            )}
-
+            {/* Ethics Modal Button */}
             <button
               onClick={onOpenEthicsModal}
-              className="px-2.5 py-1.5 text-xs rounded-lg text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200 transition-colors flex items-center gap-1.5 font-medium"
-              title="WHO Safeguards & Ethics Rationale"
+              className="p-2 sm:px-2.5 sm:py-1.5 text-xs rounded-xl text-slate-700 hover:text-emerald-800 hover:bg-emerald-50 border border-slate-200 transition-colors flex items-center gap-1.5 font-medium"
+              title="WHO Ethics, Privacy Safeguards & Judge Q&A"
             >
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span className="hidden lg:inline">Ethics & Safeguards</span>
+              <span className="hidden lg:inline">Ethics Safeguards</span>
             </button>
-
-            {currentRole === 'student' && (
-              <button
-                onClick={onOpenCheckIn}
-                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-medium shadow-sm shadow-emerald-600/30 transition-all flex items-center gap-1.5"
-              >
-                <span>+ Check-in</span>
-              </button>
-            )}
           </div>
         </div>
       </div>

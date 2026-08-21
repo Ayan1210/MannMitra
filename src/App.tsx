@@ -1,29 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { Role, StudentProfile, CheckInRecord, CounselorAction } from './types';
+import { Role, StudentProfile, StaffProfile, AuthSessionUser, CheckInRecord, CounselorAction } from './types';
 import { INITIAL_STUDENTS } from './lib/mockData';
 import { analyzeWellbeingPattern } from './lib/patternEngine';
 import {
   fetchAllStudents,
-  getCurrentUser,
+  getAuthSession,
   submitCheckIn,
   updateConsentSettings,
   fetchCounselorActions,
   logCounselorAction,
+  loginStudent,
+  loginCounselor,
+  loginAdmin,
   authStorage,
 } from './lib/api';
 import { Navbar } from './components/Navbar';
+import { FrontPage } from './components/Landing/FrontPage';
 import { StudentDashboard } from './components/StudentView/StudentDashboard';
 import { StudentCheckInModal } from './components/StudentView/StudentCheckInModal';
-import { StudentAuthModal } from './components/StudentView/StudentAuthModal';
+import { RoleAuthModal } from './components/Auth/RoleAuthModal';
+import { AccessDeniedGate } from './components/Auth/AccessDeniedGate';
 import { CounselorDashboard } from './components/CounselorView/CounselorDashboard';
 import { AdminDashboard } from './components/AdminView/AdminDashboard';
 import { AaravStoryWalkthrough } from './components/StoryMode/AaravStoryWalkthrough';
 import { EthicalFrameworkModal } from './components/EthicalSafeguards/EthicalFrameworkModal';
 
 export default function App() {
-  const [currentRole, setCurrentRole] = useState<Role>('story_mode');
+  const [currentRole, setCurrentRole] = useState<Role>('landing');
   const [students, setStudents] = useState<StudentProfile[]>(INITIAL_STUDENTS);
   const [activeStudentId, setActiveStudentId] = useState<string>('stu-1024');
+  const [authSession, setAuthSession] = useState<AuthSessionUser | null>(null);
+
   const [counselorActions, setCounselorActions] = useState<CounselorAction[]>([
     {
       id: 'act-1',
@@ -40,9 +47,10 @@ export default function App() {
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
   const [checkInInitialData, setCheckInInitialData] = useState<any>(undefined);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalTargetRole, setAuthModalTargetRole] = useState<'student' | 'counselor' | 'admin'>('student');
   const [isEthicsModalOpen, setIsEthicsModalOpen] = useState(false);
 
-  // Load students and session from SQLite3 Express backend on startup
+  // Load students and actions from backend on startup (clean unauthenticated landing)
   useEffect(() => {
     async function initData() {
       try {
@@ -54,11 +62,6 @@ export default function App() {
         const backendActions = await fetchCounselorActions();
         if (backendActions && backendActions.length > 0) {
           setCounselorActions(backendActions);
-        }
-
-        const savedUser = await getCurrentUser();
-        if (savedUser) {
-          setActiveStudentId(savedUser.id);
         }
       } catch (err) {
         console.warn('Initial data synchronization note:', err);
@@ -80,7 +83,7 @@ export default function App() {
     newCheckInData: Omit<CheckInRecord, 'id' | 'studentId' | 'date' | 'weekNumber'>
   ) => {
     try {
-      // Submit to SQLite backend API
+      // Submit to backend API
       const result = await submitCheckIn({
         studentId: currentStudent.id,
         overallWellbeing: newCheckInData.overallWellbeing,
@@ -138,16 +141,37 @@ export default function App() {
     setIsCheckInModalOpen(true);
   };
 
-  const handleAuthSuccess = (student: StudentProfile) => {
-    setStudents((prev) => {
-      const exists = prev.some((s) => s.id === student.id);
-      if (exists) {
-        return prev.map((s) => (s.id === student.id ? student : s));
-      }
-      return [student, ...prev];
-    });
-    setActiveStudentId(student.id);
-    setCurrentRole('student');
+  const handleOpenAuth = (roleTarget: 'student' | 'counselor' | 'admin' = 'student') => {
+    setAuthModalTargetRole(roleTarget);
+    setIsAuthModalOpen(true);
+  };
+
+  const handleAuthSuccess = (session: AuthSessionUser) => {
+    setAuthSession(session);
+
+    if (session.role === 'student') {
+      const student = session.profile as StudentProfile;
+      setStudents((prev) => {
+        const exists = prev.some((s) => s.id === student.id);
+        if (exists) {
+          return prev.map((s) => (s.id === student.id ? student : s));
+        }
+        return [student, ...prev];
+      });
+      setActiveStudentId(student.id);
+      setCurrentRole('student');
+    } else if (session.role === 'counselor') {
+      setCurrentRole('counselor');
+    } else if (session.role === 'admin') {
+      setCurrentRole('admin');
+    }
+  };
+
+  const handleLogout = () => {
+    authStorage.clear();
+    setAuthSession(null);
+    setActiveStudentId('stu-1024');
+    setCurrentRole('landing');
   };
 
   const handleUpdateConsent = async (newConsent: StudentProfile['consent']) => {
@@ -243,6 +267,37 @@ export default function App() {
     });
   };
 
+  const handleQuickAuthenticateCredentials = async (
+    role: 'student' | 'counselor' | 'admin',
+    email: string,
+    pass: string
+  ) => {
+    try {
+      if (role === 'student') {
+        const { student, token } = await loginStudent({ email, password: pass });
+        setActiveStudentId(student.id);
+        handleAuthSuccess({ role: 'student', profile: student, token });
+        setCurrentRole('student');
+      } else if (role === 'counselor') {
+        const { user, token } = await loginCounselor({ email, password: pass });
+        handleAuthSuccess({ role: 'counselor', profile: user, token });
+        setCurrentRole('counselor');
+      } else if (role === 'admin') {
+        const { user, token } = await loginAdmin({ email, password: pass });
+        handleAuthSuccess({ role: 'admin', profile: user, token });
+        setCurrentRole('admin');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      handleOpenAuth(role);
+    }
+  };
+
+  // Role Access Checks
+  const isStudentAuthorized = authSession?.role === 'student';
+  const isCounselorAuthorized = authSession?.role === 'counselor';
+  const isAdminAuthorized = authSession?.role === 'admin';
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-emerald-500/20 selection:text-emerald-900">
       {/* Top Navigation */}
@@ -253,19 +308,40 @@ export default function App() {
         onOpenEthicsModal={() => setIsEthicsModalOpen(true)}
         unreadAlertCount={unreadAlerts}
         currentStudent={currentStudent}
-        onOpenAuthModal={() => setIsAuthModalOpen(true)}
-        onLogout={() => {
-          authStorage.clear();
-          setActiveStudentId('stu-1024');
-        }}
+        currentSession={authSession}
+        onOpenAuthModal={handleOpenAuth}
+        onLogout={handleLogout}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+        {currentRole === 'landing' && (
+          <FrontPage
+            onSelectRole={setCurrentRole}
+            onOpenAuthModal={handleOpenAuth}
+            onQuickAuthenticate={handleQuickAuthenticateCredentials}
+            onOpenEthicsModal={() => setIsEthicsModalOpen(true)}
+            currentSession={authSession}
+            unreadAlertCount={unreadAlerts}
+          />
+        )}
+
         {currentRole === 'story_mode' && (
           <AaravStoryWalkthrough
-            onSwitchToCounselor={() => setCurrentRole('counselor')}
-            onSwitchToStudent={() => setCurrentRole('student')}
+            onSwitchToCounselor={() => {
+              if (isCounselorAuthorized) {
+                setCurrentRole('counselor');
+              } else {
+                handleQuickAuthenticateCredentials('counselor', 'counselor.sharma@campus.edu', 'counselor123');
+              }
+            }}
+            onSwitchToStudent={() => {
+              if (isStudentAuthorized) {
+                setCurrentRole('student');
+              } else {
+                handleQuickAuthenticateCredentials('student', 'aarav.sharma@campus.edu', 'password123');
+              }
+            }}
           />
         )}
 
@@ -275,20 +351,42 @@ export default function App() {
             onOpenCheckIn={handleOpenCheckInWithData}
             onUpdateConsent={handleUpdateConsent}
             onRequestCounselorChat={handleRequestCounselorChat}
-            onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            onOpenAuthModal={() => handleOpenAuth('student')}
           />
         )}
 
         {currentRole === 'counselor' && (
-          <CounselorDashboard
-            students={students}
-            counselorActions={counselorActions}
-            onLogAction={handleLogCounselorAction}
-            onSimulateCheckIn={handleSimulateCheckIn}
-          />
+          isCounselorAuthorized ? (
+            <CounselorDashboard
+              students={students}
+              counselorActions={counselorActions}
+              onLogAction={handleLogCounselorAction}
+              onSimulateCheckIn={handleSimulateCheckIn}
+            />
+          ) : (
+            <AccessDeniedGate
+              attemptedRole="counselor"
+              currentSession={authSession}
+              onOpenLoginModal={(role) => handleOpenAuth(role)}
+              onQuickAuthenticate={handleQuickAuthenticateCredentials}
+              onReturnToStudent={() => setCurrentRole('landing')}
+            />
+          )
         )}
 
-        {currentRole === 'admin' && <AdminDashboard />}
+        {currentRole === 'admin' && (
+          isAdminAuthorized ? (
+            <AdminDashboard />
+          ) : (
+            <AccessDeniedGate
+              attemptedRole="admin"
+              currentSession={authSession}
+              onOpenLoginModal={(role) => handleOpenAuth(role)}
+              onQuickAuthenticate={handleQuickAuthenticateCredentials}
+              onReturnToStudent={() => setCurrentRole('landing')}
+            />
+          )
+        )}
       </main>
 
       {/* Student Check-in Modal */}
@@ -303,11 +401,12 @@ export default function App() {
         initialData={checkInInitialData}
       />
 
-      {/* Student Authentication Modal */}
-      <StudentAuthModal
+      {/* Unified Role-Based Authentication Modal */}
+      <RoleAuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         onAuthSuccess={handleAuthSuccess}
+        initialRole={authModalTargetRole}
       />
 
       {/* Ethical Framework & Judge Q&A Modal */}
@@ -332,9 +431,11 @@ export default function App() {
               WHO Guidance Compliance
             </button>
             <span>•</span>
+            <span>Role-Based Access Control (RBAC)</span>
+            <span>•</span>
             <span>Zero Diagnostic Claims</span>
             <span>•</span>
-            <span>SQLite3 + Node.js Backend</span>
+            <span>Node.js + Express + SQLite3 DB</span>
           </div>
         </div>
       </footer>

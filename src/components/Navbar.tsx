@@ -1,6 +1,6 @@
 import React from 'react';
-import { ShieldCheck, HeartHandshake, Sparkles, BookOpen, AlertCircle } from 'lucide-react';
-import { Role } from '../types';
+import { ShieldCheck, HeartHandshake, Sparkles, LogIn, UserCircle, LogOut } from 'lucide-react';
+import { Role, StudentProfile } from '../types';
 
 interface NavbarProps {
   currentRole: Role;
@@ -8,6 +8,9 @@ interface NavbarProps {
   onOpenCheckIn: () => void;
   onOpenEthicsModal: () => void;
   unreadAlertCount: number;
+  currentStudent?: StudentProfile;
+  onOpenAuthModal?: () => void;
+  onLogout?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -16,6 +19,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenCheckIn,
   onOpenEthicsModal,
   unreadAlertCount,
+  currentStudent,
+  onOpenAuthModal,
+  onLogout,
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-xs">
@@ -100,6 +106,36 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right Action Buttons */}
           <div className="flex items-center gap-2">
+            {/* Student Auth status indicator in student role */}
+            {currentRole === 'student' && currentStudent && onOpenAuthModal && (
+              <div className="hidden sm:flex items-center gap-2 pr-1">
+                <button
+                  onClick={onOpenAuthModal}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors border border-slate-200/80"
+                  title="Switch or create student account"
+                >
+                  <img
+                    src={currentStudent.avatar}
+                    alt={currentStudent.name}
+                    className="w-5 h-5 rounded-full object-cover"
+                  />
+                  <span>{currentStudent.name.split(' ')[0]}</span>
+                  <span className="text-[10px] text-slate-500 font-mono">({currentStudent.anonymousCode})</span>
+                </button>
+              </div>
+            )}
+
+            {currentRole === 'student' && onOpenAuthModal && (
+              <button
+                onClick={onOpenAuthModal}
+                className="px-2.5 py-1.5 text-xs rounded-lg text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1.5 font-medium sm:hidden"
+                title="Login / Create Account"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Account</span>
+              </button>
+            )}
+
             <button
               onClick={onOpenEthicsModal}
               className="px-2.5 py-1.5 text-xs rounded-lg text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200 transition-colors flex items-center gap-1.5 font-medium"
@@ -112,7 +148,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {currentRole === 'student' && (
               <button
                 onClick={onOpenCheckIn}
-                className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-medium shadow-sm shadow-emerald-600/30 transition-all flex items-center gap-1.5"
+                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-medium shadow-sm shadow-emerald-600/30 transition-all flex items-center gap-1.5"
               >
                 <span>+ Check-in</span>
               </button>

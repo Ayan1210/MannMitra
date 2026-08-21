@@ -25,12 +25,14 @@ import { StudentProfile, CheckInRecord } from '../../types';
 import { analyzeWellbeingPattern, calculateCompositeScore } from '../../lib/patternEngine';
 import { BoxBreathingWidget } from './BoxBreathingWidget';
 import { StudentPrivacyModal } from './StudentPrivacyModal';
+import { VoiceReflectionWidget } from './VoiceReflectionWidget';
 
 interface StudentDashboardProps {
   student: StudentProfile;
-  onOpenCheckIn: () => void;
+  onOpenCheckIn: (initialVoiceData?: any) => void;
   onUpdateConsent: (consent: StudentProfile['consent']) => void;
   onRequestCounselorChat: (note: string) => void;
+  onOpenAuthModal?: () => void;
 }
 
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({
@@ -38,6 +40,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   onOpenCheckIn,
   onUpdateConsent,
   onRequestCounselorChat,
+  onOpenAuthModal,
 }) => {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [selectedChartMetric, setSelectedChartMetric] = useState<
@@ -153,6 +156,16 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
           {/* Quick Actions */}
           <div className="flex items-center gap-3 flex-wrap">
+            {onOpenAuthModal && (
+              <button
+                onClick={onOpenAuthModal}
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/60 transition-colors flex items-center gap-1.5"
+              >
+                <span>🔑</span>
+                <span>Switch / Sign In</span>
+              </button>
+            )}
+
             <button
               onClick={() => setShowPrivacyModal(true)}
               className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/60 transition-colors flex items-center gap-2"
@@ -162,7 +175,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             </button>
 
             <button
-              onClick={onOpenCheckIn}
+              onClick={() => onOpenCheckIn()}
               className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-600/30 transition-all flex items-center gap-2"
             >
               <Heart className="w-4 h-4 fill-white" />
@@ -450,8 +463,23 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </div>
         </div>
 
-        {/* Right Column: Interactive Self-Care & Grounding Tools */}
+        {/* Right Column: Interactive Self-Care, Voice Journaling & Grounding Tools */}
         <div className="space-y-6">
+          {/* Voice Speech Journaling Widget */}
+          <VoiceReflectionWidget
+            studentId={student.id}
+            onApplyToCheckIn={(data) => {
+              onOpenCheckIn({
+                personalReflection: data.reflectionText,
+                overallWellbeing: data.ratings?.overallWellbeing,
+                academicStress: data.ratings?.academicStress,
+                sleepQuality: data.ratings?.sleepQuality,
+                energyLevel: data.ratings?.energyLevel,
+                primaryTag: data.primaryTag as any,
+              });
+            }}
+          />
+
           {/* Box Breathing Widget */}
           <BoxBreathingWidget />
 

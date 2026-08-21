@@ -20,6 +20,7 @@ export interface CheckInRecord {
   primaryTag?: 'Exams' | 'Family' | 'Health' | 'Social' | 'Projects' | 'Routine';
   personalReflection?: string;
   isPrivateNote?: boolean; // Only visible to student, not counselor
+  voiceTranscript?: string;
 }
 
 export interface StudentProfile {

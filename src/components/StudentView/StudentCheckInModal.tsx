@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Heart, Sparkles, Lock, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Heart, Sparkles, Lock, ShieldCheck, CheckCircle2, Mic, MicOff } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { CheckInRecord } from '../../types';
 
@@ -8,6 +8,16 @@ interface StudentCheckInModalProps {
   onClose: () => void;
   onSubmit: (checkIn: Omit<CheckInRecord, 'id' | 'studentId' | 'date' | 'weekNumber'>) => void;
   currentWeekNumber: number;
+  initialData?: {
+    overallWellbeing?: number;
+    academicStress?: number;
+    sleepQuality?: number;
+    energyLevel?: number;
+    concentration?: number;
+    socialConnection?: number;
+    primaryTag?: 'Exams' | 'Family' | 'Health' | 'Social' | 'Projects' | 'Routine';
+    personalReflection?: string;
+  };
 }
 
 export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
@@ -15,6 +25,7 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
   onClose,
   onSubmit,
   currentWeekNumber,
+  initialData,
 }) => {
   const [overallWellbeing, setOverallWellbeing] = useState<number>(4);
   const [academicStress, setAcademicStress] = useState<number>(2);
@@ -27,11 +38,92 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
   const [isPrivateNote, setIsPrivateNote] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+  // Speech to text inside check-in
+  const [isListeningSpeech, setIsListeningSpeech] = useState<boolean>(false);
+  const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (initialData) {
+      if (initialData.overallWellbeing) setOverallWellbeing(initialData.overallWellbeing);
+      if (initialData.academicStress) setAcademicStress(initialData.academicStress);
+      if (initialData.sleepQuality) setSleepQuality(initialData.sleepQuality);
+      if (initialData.energyLevel) setEnergyLevel(initialData.energyLevel);
+      if (initialData.primaryTag) setPrimaryTag(initialData.primaryTag);
+      if (initialData.personalReflection) setPersonalReflection(initialData.personalReflection);
+    }
+  }, [initialData, isOpen]);
+
+  // Speech Recognition setup
+  useEffect(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event: any) => {
+        let text = '';
+        for (let i = 0; i < event.results.length; i++) {
+          text += event.results[i][0].transcript + ' ';
+        }
+        if (text.trim()) {
+          setPersonalReflection((prev) => {
+            const trimmed = prev.trim();
+            return trimmed ? `${trimmed} ${text.trim()}` : text.trim();
+          });
+        }
+      };
+
+      recognition.onerror = () => {
+        setIsListeningSpeech(false);
+      };
+
+      recognition.onend = () => {
+        setIsListeningSpeech(false);
+      };
+
+      recognitionRef.current = recognition;
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
+
+  const toggleSpeechDictation = () => {
+    if (!recognitionRef.current) {
+      alert('Speech recognition is not supported in this browser window. You can type directly.');
+      return;
+    }
+
+    if (isListeningSpeech) {
+      recognitionRef.current.stop();
+      setIsListeningSpeech(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsListeningSpeech(true);
+      } catch (err) {
+        console.warn('Speech recognition start error:', err);
+      }
+    }
+  };
+
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+
+    if (recognitionRef.current && isListeningSpeech) {
+      recognitionRef.current.stop();
+      setIsListeningSpeech(false);
+    }
 
     // Trigger celebratory confetti
     confetti({
@@ -79,7 +171,7 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-100 overflow-hidden my-6">
+      <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-100 overflow-hidden my-6">
         {/* Header */}
         <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-6 text-white relative">
           <button
@@ -94,14 +186,14 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
           </div>
           <h2 className="text-xl sm:text-2xl font-bold mt-1 text-white">How has your week felt?</h2>
           <p className="text-emerald-100 text-xs sm:text-sm mt-1 max-w-lg">
-            Takes 60 seconds. Your answers help spot subtle shifts in workload and rest before burnout sets in.
+            Takes 60 seconds. Voice dictation or manual sliders help spot subtle shifts in workload and rest before burnout sets in.
           </p>
         </div>
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
           {/* Question 1: Overall Wellbeing */}
-          <div className="bg-emerald-50/60 rounded-xl p-4 border border-emerald-100">
+          <div className="bg-emerald-50/60 rounded-2xl p-4 border border-emerald-100">
             <label className="block text-sm font-semibold text-emerald-950 mb-2">
               1. Overall Wellbeing
               <span className="text-xs font-normal text-emerald-700 block mt-0.5">
@@ -147,7 +239,7 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
             </h3>
 
             {/* Academic Pressure */}
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/80">
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-semibold text-slate-800">
                   2. Academic Pressure & Workload
@@ -181,7 +273,7 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
             </div>
 
             {/* Sleep Quality */}
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/80">
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-semibold text-slate-800">
                   3. Sleep Restfulness & Rhythm
@@ -215,7 +307,7 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
             </div>
 
             {/* Energy Level */}
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/80">
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-semibold text-slate-800">
                   4. Daily Energy Level
@@ -249,7 +341,7 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
             </div>
 
             {/* Social Connection */}
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/80">
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-semibold text-slate-800">
                   5. Social Connection
@@ -283,7 +375,7 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
             </div>
 
             {/* Concentration */}
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/80">
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-semibold text-slate-800">
                   6. Focus & Concentration
@@ -328,7 +420,7 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
                   key={tag}
                   type="button"
                   onClick={() => setPrimaryTag(tag)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
                     primaryTag === tag
                       ? 'bg-slate-900 text-white shadow-xs'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -340,11 +432,23 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
             </div>
           </div>
 
-          {/* Optional Reflection Note */}
+          {/* Optional Reflection Note + Voice Dictation Toggle */}
           <div>
             <div className="flex justify-between items-center mb-1">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Optional Reflection Note
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                <span>Optional Reflection Note</span>
+                <button
+                  type="button"
+                  onClick={toggleSpeechDictation}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-semibold flex items-center gap-1 transition-colors ${
+                    isListeningSpeech
+                      ? 'bg-rose-100 text-rose-800 animate-pulse'
+                      : 'bg-teal-100 text-teal-800 hover:bg-teal-200'
+                  }`}
+                >
+                  {isListeningSpeech ? <MicOff className="w-3 h-3 text-rose-600" /> : <Mic className="w-3 h-3 text-teal-600" />}
+                  <span>{isListeningSpeech ? 'Listening (Tap to stop)' : '🎙️ Speak to Dictate'}</span>
+                </button>
               </label>
               <button
                 type="button"
@@ -358,16 +462,20 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
               </button>
             </div>
             <textarea
-              rows={2}
+              rows={3}
               value={personalReflection}
               onChange={(e) => setPersonalReflection(e.target.value)}
-              placeholder="Any context you'd like to remember? e.g., 'Late night lab assignment submissions due Friday'..."
-              className="w-full text-xs sm:text-sm p-3 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              placeholder="Type or click 'Speak to Dictate' (e.g., 'Late night lab assignment submissions due Friday, feeling exhausted in morning')..."
+              className={`w-full text-xs sm:text-sm p-3.5 rounded-2xl border transition-all ${
+                isListeningSpeech
+                  ? 'border-rose-400 ring-2 ring-rose-200 bg-rose-50/20'
+                  : 'border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500'
+              }`}
             />
           </div>
 
           {/* Consent / Privacy Reminder */}
-          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+          <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
             <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
             <div>
               <span className="font-semibold text-slate-800">Consent & Privacy Safe:</span> You can withdraw consent or edit sharing preferences anytime. Counselors only review multi-week aggregate trend signals to offer timely support.
@@ -386,10 +494,10 @@ export const StudentCheckInModal: React.FC<StudentCheckInModalProps> = ({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-6 py-2.5 text-xs sm:text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md shadow-emerald-600/20 transition-all flex items-center gap-2"
+              className="px-6 py-2.5 text-xs sm:text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-2xl shadow-md shadow-emerald-600/20 transition-all flex items-center gap-2"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>{isSubmitting ? 'Saving...' : 'Save Check-in'}</span>
+              <span>{isSubmitting ? 'Saving to Database...' : 'Save Check-in'}</span>
             </button>
           </div>
         </form>

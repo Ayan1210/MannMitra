@@ -5,7 +5,6 @@ import {
   Stethoscope,
   Building2,
   ShieldCheck,
-  Sparkles,
   ArrowRight,
   Lock,
   CheckCircle2,
@@ -126,18 +125,11 @@ export const FrontPage: React.FC<FrontPageProps> = ({
               <ArrowRight className="w-4 h-4" />
             </a>
             <button
-              onClick={() => onSelectRole('story_mode')}
-              className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-white font-semibold text-sm border border-slate-700 transition-all flex items-center justify-center gap-2"
-            >
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>Explore Aarav's 4-Week Story</span>
-            </button>
-            <button
               onClick={onOpenEthicsModal}
-              className="w-full sm:w-auto px-5 py-3.5 rounded-xl bg-transparent hover:bg-slate-800/50 text-slate-300 hover:text-white font-medium text-sm transition-all flex items-center justify-center gap-2"
+              className="w-full sm:w-auto px-5 py-3.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-white font-medium text-sm border border-slate-700 transition-all flex items-center justify-center gap-2"
             >
               <FileText className="w-4 h-4 text-slate-400" />
-              <span>Ethical Framework</span>
+              <span>Ethical Safeguards & Framework</span>
             </button>
           </div>
         </div>

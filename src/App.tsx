@@ -22,7 +22,6 @@ import { RoleAuthModal } from './components/Auth/RoleAuthModal';
 import { AccessDeniedGate } from './components/Auth/AccessDeniedGate';
 import { CounselorDashboard } from './components/CounselorView/CounselorDashboard';
 import { AdminDashboard } from './components/AdminView/AdminDashboard';
-import { AaravStoryWalkthrough } from './components/StoryMode/AaravStoryWalkthrough';
 import { EthicalFrameworkModal } from './components/EthicalSafeguards/EthicalFrameworkModal';
 
 export default function App() {
@@ -323,25 +322,6 @@ export default function App() {
             onOpenEthicsModal={() => setIsEthicsModalOpen(true)}
             currentSession={authSession}
             unreadAlertCount={unreadAlerts}
-          />
-        )}
-
-        {currentRole === 'story_mode' && (
-          <AaravStoryWalkthrough
-            onSwitchToCounselor={() => {
-              if (isCounselorAuthorized) {
-                setCurrentRole('counselor');
-              } else {
-                handleQuickAuthenticateCredentials('counselor', 'counselor.sharma@campus.edu', 'counselor123');
-              }
-            }}
-            onSwitchToStudent={() => {
-              if (isStudentAuthorized) {
-                setCurrentRole('student');
-              } else {
-                handleQuickAuthenticateCredentials('student', 'aarav.sharma@campus.edu', 'password123');
-              }
-            }}
           />
         )}
 

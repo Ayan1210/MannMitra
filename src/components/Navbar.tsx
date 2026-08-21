@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   HeartHandshake,
-  Sparkles,
   LogIn,
   LogOut,
   ShieldCheck,
@@ -130,20 +129,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span>Institutional Analytics</span>
               </button>
             )}
-
-            {/* Interactive Story Walkthrough */}
-            <button
-              onClick={() => onSelectRole('story_mode')}
-              className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
-                currentRole === 'story_mode'
-                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs font-semibold'
-                  : 'text-amber-800 hover:text-amber-950 bg-amber-50/70 hover:bg-amber-100 border border-amber-200/80'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-500 group-hover:rotate-12 transition-transform" />
-              <span className="hidden sm:inline">"Meet Aarav"</span>
-              <span className="sm:hidden">Story</span>
-            </button>
           </div>
 
           {/* Right Action Buttons */}

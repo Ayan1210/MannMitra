@@ -18,9 +18,11 @@ import {
   Info,
   BookOpen,
 } from 'lucide-react';
-import { StudentProfile, AISummaryResponse, CounselorAction } from '../../types';
+import { StudentProfile, AISummaryResponse, CounselorAction, CounselorMeeting } from '../../types';
 import { analyzeWellbeingPattern, calculateCompositeScore } from '../../lib/patternEngine';
 import { generateCounselorAISummary } from '../../lib/geminiSummary';
+import { scheduleCounselorMeeting, updateCounselorMeeting } from '../../lib/api';
+import { MeetingFollowUpModal } from './MeetingFollowUpModal';
 
 interface StudentDetailModalProps {
   isOpen: boolean;
@@ -28,6 +30,8 @@ interface StudentDetailModalProps {
   student: StudentProfile;
   onLogAction: (action: Omit<CounselorAction, 'id' | 'timestamp'>) => void;
   pastActions: CounselorAction[];
+  meetings?: CounselorMeeting[];
+  onMeetingScheduled?: (meeting: CounselorMeeting) => void;
 }
 
 export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
@@ -36,6 +40,8 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   student,
   onLogAction,
   pastActions,
+  meetings = [],
+  onMeetingScheduled,
 }) => {
   const [activeTab, setActiveTab] = useState<'trends' | 'ai_briefing' | 'action_log'>('trends');
   const [aiSummary, setAiSummary] = useState<AISummaryResponse | null>(null);
@@ -43,6 +49,16 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   const [actionType, setActionType] = useState<CounselorAction['actionType']>('checkin_scheduled');
   const [actionNote, setActionNote] = useState<string>('');
   const [actionSuccess, setActionSuccess] = useState<boolean>(false);
+
+  // Dedicated 1-on-1 Meeting Scheduling Form State
+  const [meetingDate, setMeetingDate] = useState<string>('2026-08-25');
+  const [meetingTime, setMeetingTime] = useState<string>('11:30 AM');
+  const [meetingDuration, setMeetingDuration] = useState<string>('20 minutes');
+  const [meetingMode, setMeetingMode] = useState<'In-person' | 'Online'>('In-person');
+  const [meetingNote, setMeetingNote] = useState<string>('');
+  const [isSubmittingMeeting, setIsSubmittingMeeting] = useState<boolean>(false);
+  const [meetingSuccessMsg, setMeetingSuccessMsg] = useState<string>('');
+  const [editingMeeting, setEditingMeeting] = useState<CounselorMeeting | null>(null);
 
   const analysis = analyzeWellbeingPattern(student.checkIns);
   const checkIns = student.checkIns;
@@ -86,6 +102,53 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     setTimeout(() => {
       setActionSuccess(false);
     }, 2000);
+  };
+
+  const handleScheduleMeetingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!meetingDate || !meetingTime) return;
+
+    setIsSubmittingMeeting(true);
+    try {
+      const scheduled = await scheduleCounselorMeeting({
+        studentId: student.id,
+        studentCode: student.anonymousCode,
+        studentName: student.name,
+        counselorId: 'csl-1',
+        counselorName: 'Dr. Ananya Sharma',
+        date: meetingDate,
+        time: meetingTime,
+        duration: meetingDuration,
+        mode: meetingMode,
+        note: meetingNote.trim(),
+      });
+
+      if (scheduled && onMeetingScheduled) {
+        onMeetingScheduled(scheduled);
+      }
+
+      // Also invoke onLogAction so action history reflects it seamlessly
+      onLogAction({
+        studentId: student.id,
+        studentCode: student.anonymousCode,
+        counselorName: 'Dr. Ananya Sharma',
+        actionType: 'checkin_scheduled',
+        note: `Scheduled 1-on-1 Gentle Check-in (${meetingMode}, ${meetingDate} at ${meetingTime}, ${meetingDuration})${
+          meetingNote ? `: "${meetingNote.trim()}"` : '.'
+        }`,
+        status: 'completed',
+      });
+
+      setMeetingSuccessMsg(`Meeting scheduled for ${meetingDate} at ${meetingTime} (${meetingMode})!`);
+      setMeetingNote('');
+      setTimeout(() => {
+        setMeetingSuccessMsg('');
+      }, 4000);
+    } catch (err) {
+      console.warn('Error scheduling meeting:', err);
+    } finally {
+      setIsSubmittingMeeting(false);
+    }
   };
 
   // Dimensions chart helper
@@ -156,19 +219,19 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
             {/* Status Pills */}
             <div className="flex items-center gap-2">
               {analysis.status === 'check_in_recommended' && (
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1.5">
+                <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-rose-500/20 text-rose-200 border border-rose-500/40 flex items-center gap-1.5 shadow-xs">
                   <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
-                  Check-in Recommended
+                  <span>🔴 Higher Concern • Requires Review</span>
                 </span>
               )}
               {analysis.status === 'monitor' && (
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  🟡 Monitor
+                <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-200 border border-amber-500/40 flex items-center gap-1.5 shadow-xs">
+                  <span>🟡 Moderate Concern • Support Recommended</span>
                 </span>
               )}
               {analysis.status === 'stable' && (
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  🟢 Stable
+                <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 flex items-center gap-1.5 shadow-xs">
+                  <span>🟢 Low Concern • Stable Baseline</span>
                 </span>
               )}
             </div>
@@ -214,6 +277,84 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-slate-50">
+          {/* Clinical Intervention Decision Support Pathway Card */}
+          <div
+            className={`p-4 rounded-2xl border transition-all ${
+              analysis.status === 'check_in_recommended'
+                ? 'bg-rose-50/70 border-rose-200 text-rose-950'
+                : analysis.status === 'monitor'
+                ? 'bg-amber-50/70 border-amber-200 text-amber-950'
+                : 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+            }`}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black uppercase tracking-wider">
+                    {analysis.status === 'check_in_recommended' && '🔴 HIGHER CONCERN TIER'}
+                    {analysis.status === 'monitor' && '🟡 MODERATE CONCERN TIER'}
+                    {analysis.status === 'stable' && '🟢 LOW CONCERN TIER'}
+                  </span>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white/80 border border-slate-200">
+                    {analysis.status === 'check_in_recommended' && 'Follow-up Recommended'}
+                    {analysis.status === 'monitor' && 'Support Recommended'}
+                    {analysis.status === 'stable' && 'Normal Check-ins'}
+                  </span>
+                </div>
+                <p className="text-xs font-medium mt-1 leading-relaxed text-slate-700">
+                  {analysis.status === 'check_in_recommended' &&
+                    'Intervention Principle: Prioritize counselor review and possible 1-on-1 follow-up check-in.'}
+                  {analysis.status === 'monitor' &&
+                    'Intervention Principle: Counselor may review longitudinal indicators, share resources, monitor, or schedule a gentle check-in.'}
+                  {analysis.status === 'stable' &&
+                    'Intervention Principle: Continue normal check-ins and provide general wellbeing & self-care resources.'}
+                </p>
+              </div>
+
+              {/* Quick Action Trigger Button */}
+              <div className="flex items-center gap-2 shrink-0">
+                {analysis.status === 'check_in_recommended' && (
+                  <button
+                    onClick={() => {
+                      setActionType('checkin_scheduled');
+                      setActiveTab('action_log');
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5"
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Schedule 1-on-1 Follow-up</span>
+                  </button>
+                )}
+                {analysis.status === 'monitor' && (
+                  <button
+                    onClick={() => {
+                      setActionType('wellness_resource');
+                      setActiveTab('action_log');
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5"
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Share Resource / Mentor</span>
+                  </button>
+                )}
+                {analysis.status === 'stable' && (
+                  <button
+                    onClick={() => {
+                      setActionType('wellness_resource');
+                      setActiveTab('action_log');
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5"
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Provide Wellbeing Guide</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-500">
+              <span>🛡️ AI identifies patterns/indicators only. Zero medical diagnosis. Counselor makes all final intervention decisions.</span>
+            </div>
+          </div>
           {/* TAB 1: Longitudinal Trends & Pattern Engine Explanation */}
           {activeTab === 'trends' && (
             <div className="space-y-6">
@@ -551,83 +692,335 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           {/* TAB 3: Action Log & Follow-up Scheduler */}
           {activeTab === 'action_log' && (
             <div className="space-y-6">
-              {/* Action Creator Form */}
+              {/* Action / Meeting Creator Form */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
-                <h3 className="font-bold text-sm text-slate-900 mb-3 flex items-center gap-2">
-                  <UserCheck className="w-4 h-4 text-teal-600" />
-                  <span>Log Counselor Touchpoint / Action</span>
-                </h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-teal-600" />
+                    <span>Counselor Action & Scheduling Center</span>
+                  </h3>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    Student: <span className="font-semibold text-slate-800">{student.name} ({student.anonymousCode})</span>
+                  </span>
+                </div>
 
-                <form onSubmit={handleSubmitAction} className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Action Type
-                      </label>
-                      <select
-                        value={actionType}
-                        onChange={(e) =>
-                          setActionType(e.target.value as CounselorAction['actionType'])
-                        }
-                        className="w-full text-xs p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500"
-                      >
-                        <option value="checkin_scheduled">Schedule 1-on-1 Gentle Check-in</option>
-                        <option value="touchpoint_logged">Log Completed Office Hour Visit</option>
-                        <option value="wellness_resource">Share Academic Pacing / Sleep Guide</option>
-                        <option value="peer_support">Connect with Peer Support Mentor</option>
-                        <option value="status_override">Mark Reviewed / Dismiss Alert</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Counselor In Charge
-                      </label>
-                      <input
-                        type="text"
-                        disabled
-                        value="Dr. Ananya Sharma (Lead Wellbeing Officer)"
-                        className="w-full text-xs p-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600"
-                      />
-                    </div>
-                  </div>
+                <div className="mb-4">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Select Action Type
+                  </label>
+                  <select
+                    value={actionType}
+                    onChange={(e) =>
+                      setActionType(e.target.value as CounselorAction['actionType'])
+                    }
+                    className="w-full text-xs p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 bg-white font-semibold text-slate-800"
+                  >
+                    <option value="checkin_scheduled">
+                      🗓️ Schedule 1-on-1 Gentle Check-in (Recommended for Higher Concern)
+                    </option>
+                    <option value="wellness_resource">
+                      📚 Share Academic Pacing / Sleep Guide (Recommended for Moderate/Low Concern)
+                    </option>
+                    <option value="peer_support">
+                      🤝 Connect with Peer Support Mentor (Recommended for Moderate Concern)
+                    </option>
+                    <option value="touchpoint_logged">
+                      📝 Log Completed Office Hour Visit (Touchpoint Record)
+                    </option>
+                    <option value="status_override">
+                      ✅ Mark Reviewed / Dismiss Alert (Routine Monitoring Record)
+                    </option>
+                  </select>
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Clinical Notes & Follow-up Plan
-                    </label>
-                    <textarea
-                      rows={3}
-                      required
-                      value={actionNote}
-                      onChange={(e) => setActionNote(e.target.value)}
-                      placeholder="e.g., 'Met with Aarav for 20 mins. We discussed restructuring his lab submission timetable and scheduled a relaxing breathing session. Will review next week.'..."
-                      className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    {actionSuccess && (
-                      <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1">
-                        <CheckCircle className="w-4 h-4" /> Touchpoint logged successfully!
+                {/* WHEN ACTION TYPE IS: Schedule 1-on-1 Gentle Check-in */}
+                {actionType === 'checkin_scheduled' ? (
+                  <form onSubmit={handleScheduleMeetingSubmit} className="space-y-4 bg-teal-50/40 p-4 rounded-2xl border border-teal-100">
+                    <div className="flex items-center gap-2 pb-1 border-b border-teal-100/80">
+                      <Calendar className="w-4 h-4 text-teal-700" />
+                      <span className="text-xs font-bold text-teal-950">
+                        1-on-1 Meeting Scheduling Details
                       </span>
-                    )}
-                    <div className="ml-auto">
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Student
+                        </label>
+                        <input
+                          type="text"
+                          disabled
+                          value={`${student.name} (${student.anonymousCode})`}
+                          className="w-full text-xs p-2.5 rounded-xl bg-white/80 border border-slate-200 text-slate-700 font-medium"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Counselor
+                        </label>
+                        <input
+                          type="text"
+                          disabled
+                          value="Dr. Ananya Sharma (Lead Wellbeing Officer)"
+                          className="w-full text-xs p-2.5 rounded-xl bg-white/80 border border-slate-200 text-slate-700 font-medium"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Date</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={meetingDate}
+                          onChange={(e) => setMeetingDate(e.target.value)}
+                          placeholder="e.g. 25 August 2026 or 2026-08-25"
+                          className="w-full text-xs p-2.5 rounded-xl bg-white border border-slate-200 focus:ring-2 focus:ring-teal-500 font-medium text-slate-800"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Time</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={meetingTime}
+                          onChange={(e) => setMeetingTime(e.target.value)}
+                          placeholder="e.g. 11:30 AM"
+                          className="w-full text-xs p-2.5 rounded-xl bg-white border border-slate-200 focus:ring-2 focus:ring-teal-500 font-medium text-slate-800"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Duration
+                        </label>
+                        <select
+                          value={meetingDuration}
+                          onChange={(e) => setMeetingDuration(e.target.value)}
+                          className="w-full text-xs p-2.5 rounded-xl bg-white border border-slate-200 focus:ring-2 focus:ring-teal-500 font-medium text-slate-800"
+                        >
+                          <option value="15 minutes">15 minutes</option>
+                          <option value="20 minutes">20 minutes</option>
+                          <option value="30 minutes">30 minutes</option>
+                          <option value="45 minutes">45 minutes</option>
+                          <option value="60 minutes">60 minutes</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Meeting Mode
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setMeetingMode('In-person')}
+                            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                              meetingMode === 'In-person'
+                                ? 'bg-teal-600 border-teal-600 text-white shadow-xs'
+                                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            🏢 In-person
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMeetingMode('Online')}
+                            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                              meetingMode === 'Online'
+                                ? 'bg-teal-600 border-teal-600 text-white shadow-xs'
+                                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            💻 Online
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Optional Counselor Note / Agenda
+                        </label>
+                        <input
+                          type="text"
+                          value={meetingNote}
+                          onChange={(e) => setMeetingNote(e.target.value)}
+                          placeholder="e.g. Discuss coursework pacing & routine stabilization..."
+                          className="w-full text-xs p-2.5 rounded-xl bg-white border border-slate-200 focus:ring-2 focus:ring-teal-500 font-medium text-slate-800"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2">
+                      {meetingSuccessMsg ? (
+                        <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5 animate-in fade-in">
+                          <CheckCircle className="w-4 h-4 text-emerald-600" />
+                          <span>{meetingSuccessMsg}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-slate-500 italic">
+                          Saves meeting to schedule and creates audit log.
+                        </span>
+                      )}
                       <button
                         type="submit"
-                        className="px-5 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                        disabled={isSubmittingMeeting}
+                        className="px-5 py-2.5 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-xl shadow-xs transition-colors flex items-center gap-1.5 ml-auto"
                       >
-                        <Send className="w-3.5 h-3.5" />
-                        <span>Log Action</span>
+                        <Calendar className="w-3.5 h-3.5" />
+                        <span>{isSubmittingMeeting ? 'Scheduling...' : 'Confirm & Schedule Meeting'}</span>
                       </button>
                     </div>
-                  </div>
-                </form>
+                  </form>
+                ) : (
+                  /* Standard Touchpoint Form for other action types */
+                  <form onSubmit={handleSubmitAction} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Counselor In Charge
+                        </label>
+                        <input
+                          type="text"
+                          disabled
+                          value="Dr. Ananya Sharma (Lead Wellbeing Officer)"
+                          className="w-full text-xs p-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Student Target
+                        </label>
+                        <input
+                          type="text"
+                          disabled
+                          value={`${student.name} (${student.anonymousCode})`}
+                          className="w-full text-xs p-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Clinical Notes & Follow-up Plan
+                      </label>
+                      <textarea
+                        rows={3}
+                        required
+                        value={actionNote}
+                        onChange={(e) => setActionNote(e.target.value)}
+                        placeholder="e.g., 'Met with student for 20 mins. We discussed restructuring lab submissions and scheduled relaxing breathing breaks. Will review next week.'..."
+                        className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      {actionSuccess && (
+                        <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1">
+                          <CheckCircle className="w-4 h-4" /> Touchpoint logged successfully!
+                        </span>
+                      )}
+                      <div className="ml-auto">
+                        <button
+                          type="submit"
+                          className="px-5 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Log Action</span>
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                )}
               </div>
+
+              {/* Student's Scheduled Meetings Section */}
+              {meetings.filter((m) => m.studentId === student.id).length > 0 && (
+                <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+                  <h3 className="font-bold text-sm text-slate-900 mb-3 flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-teal-600" />
+                    <span>Scheduled 1-on-1 Meetings for this Student</span>
+                  </h3>
+                  <div className="space-y-3">
+                    {meetings
+                      .filter((m) => m.studentId === student.id)
+                      .map((meet) => (
+                        <div
+                          key={meet.id}
+                          className="p-4 rounded-xl bg-teal-50/40 border border-teal-200/80 flex flex-col gap-2.5 text-xs shadow-2xs"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2 font-bold text-slate-800">
+                              <span>📅 {meet.date} at {meet.time}</span>
+                              <span className="px-2 py-0.5 rounded-md bg-teal-100 text-teal-800 font-semibold text-[10px]">
+                                {meet.duration}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold text-[10px]">
+                                {meet.mode}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                  meet.status === 'Scheduled'
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : meet.status === 'Completed'
+                                    ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                    : meet.status === 'Rescheduled'
+                                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                    : 'bg-rose-100 text-rose-800 border border-rose-300'
+                                }`}
+                              >
+                                {meet.status}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setEditingMeeting(meet)}
+                                className="px-3 py-1 text-[11px] font-bold rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 transition-colors"
+                              >
+                                {meet.status === 'Completed' ? 'Edit Follow-up Note' : 'Update Status / Follow-up'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Completed Follow-up Note */}
+                          {meet.status === 'Completed' ? (
+                            <div className="p-2.5 rounded-lg bg-blue-50/80 border border-blue-200/80 text-xs">
+                              <span className="font-bold text-[10px] uppercase tracking-wider text-blue-900 block mb-0.5">
+                                🔒 Clinical Follow-up Note (Private):
+                              </span>
+                              <p className="text-slate-700 italic">
+                                {meet.note ? `"${meet.note}"` : 'No clinical follow-up note entered.'}
+                              </p>
+                            </div>
+                          ) : (
+                            meet.note && (
+                              <p className="text-slate-600 text-xs italic bg-white/70 p-2 rounded-lg border border-slate-200">
+                                Counselor note: "{meet.note}"
+                              </p>
+                            )
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
 
               {/* Past Action Timeline */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
                 <h3 className="font-bold text-sm text-slate-900 mb-3">
-                  Historical Counselor Touchpoints
+                  Historical Counselor Touchpoints & Actions
                 </h3>
                 {pastActions.length === 0 ? (
                   <p className="text-xs text-slate-500 italic">
@@ -674,6 +1067,32 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Meeting Follow-Up & Status Modal */}
+      {editingMeeting && (
+        <MeetingFollowUpModal
+          isOpen={!!editingMeeting}
+          meeting={editingMeeting}
+          onClose={() => setEditingMeeting(null)}
+          onSave={async (updated) => {
+            try {
+              await updateCounselorMeeting(updated.id, {
+                status: updated.status,
+                note: updated.note,
+                date: updated.date,
+                time: updated.time,
+                duration: updated.duration,
+                mode: updated.mode,
+              });
+              if (onMeetingScheduled) {
+                onMeetingScheduled(updated);
+              }
+            } catch (err) {
+              console.warn('Could not update meeting from modal:', err);
+            }
+          }}
+        />
+      )}
     </div>
   );
 };

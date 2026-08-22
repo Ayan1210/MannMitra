@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Heart,
   TrendingDown,
@@ -20,12 +20,17 @@ import {
   Brain,
   ChevronRight,
   CheckCircle2,
+  Bell,
+  Clock,
+  UserCheck,
+  Check,
 } from 'lucide-react';
-import { StudentProfile, CheckInRecord } from '../../types';
+import { StudentProfile, CheckInRecord, StudentNotification, StudentMeetingInfo } from '../../types';
 import { analyzeWellbeingPattern, calculateCompositeScore } from '../../lib/patternEngine';
 import { BoxBreathingWidget } from './BoxBreathingWidget';
 import { StudentPrivacyModal } from './StudentPrivacyModal';
 import { VoiceReflectionWidget } from './VoiceReflectionWidget';
+import { fetchStudentNotifications, markStudentNotificationRead, fetchStudentMeetings } from '../../lib/api';
 
 interface StudentDashboardProps {
   student: StudentProfile;
@@ -50,6 +55,52 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [counselorRequestModal, setCounselorRequestModal] = useState(false);
   const [chatNote, setChatNote] = useState('');
   const [chatRequestedSuccess, setChatRequestedSuccess] = useState(false);
+
+  // Student Notifications & Scheduled Meetings State
+  const [notifications, setNotifications] = useState<StudentNotification[]>([]);
+  const [meetings, setMeetings] = useState<StudentMeetingInfo[]>([]);
+  const [isLoadingFollowups, setIsLoadingFollowups] = useState<boolean>(false);
+
+  // Fetch student's own notifications and scheduled meetings
+  useEffect(() => {
+    let isMounted = true;
+    async function loadStudentFollowups() {
+      if (!student.id) return;
+      setIsLoadingFollowups(true);
+      try {
+        const [notifData, meetData] = await Promise.all([
+          fetchStudentNotifications(student.id),
+          fetchStudentMeetings(student.id),
+        ]);
+        if (isMounted) {
+          if (Array.isArray(notifData)) setNotifications(notifData);
+          if (Array.isArray(meetData)) setMeetings(meetData);
+        }
+      } catch (err) {
+        console.warn('Could not load student notifications/meetings:', err);
+      } finally {
+        if (isMounted) setIsLoadingFollowups(false);
+      }
+    }
+
+    loadStudentFollowups();
+    return () => {
+      isMounted = false;
+    };
+  }, [student.id]);
+
+  const handleMarkNotifRead = async (notifId: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notifId ? { ...n, isRead: true } : n))
+    );
+    try {
+      await markStudentNotificationRead(notifId);
+    } catch (err) {
+      console.warn('Could not mark notification as read:', err);
+    }
+  };
+
+  const unreadNotifications = notifications.filter((n) => !n.isRead);
 
   const analysis = analyzeWellbeingPattern(student.checkIns);
   const checkIns = student.checkIns;
@@ -217,6 +268,131 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </div>
         )}
       </div>
+
+      {/* In-App Counselor Meeting Notifications Banner */}
+      {unreadNotifications.length > 0 && (
+        <div className="space-y-3">
+          {unreadNotifications.map((notif) => (
+            <div
+              key={notif.id}
+              className="p-4 rounded-3xl bg-teal-50/90 border border-teal-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs"
+            >
+              <div className="flex items-start gap-3.5">
+                <div className="p-2.5 rounded-2xl bg-teal-100 text-teal-800 shrink-0">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-teal-200/80 text-teal-900">
+                      Counselor Notification
+                    </span>
+                    {notif.date && notif.time && (
+                      <span className="text-xs text-teal-700 font-mono font-medium">
+                        {notif.date} • {notif.time}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-xs sm:text-sm font-bold text-teal-950 mt-1">
+                    {notif.message}
+                  </h3>
+                  <div className="flex items-center gap-2 mt-2 text-[11px] text-teal-800 font-medium">
+                    {notif.duration && <span>⏱️ Duration: {notif.duration}</span>}
+                    {notif.mode && <span>• 📍 Mode: {notif.mode}</span>}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => handleMarkNotifRead(notif.id)}
+                className="shrink-0 px-4 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 ml-auto sm:ml-0"
+              >
+                <Check className="w-4 h-4" />
+                <span>Mark Acknowledged</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Counselor Follow-ups & Scheduled Check-ins Section */}
+      {meetings.length > 0 && (
+        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-teal-500" />
+                <h2 className="text-lg font-bold text-slate-900">
+                  Counselor Follow-ups & Scheduled Check-ins
+                </h2>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Confidential 1-on-1 check-ins scheduled with your campus wellbeing counselor
+              </p>
+            </div>
+            <span className="text-xs font-semibold px-3 py-1 rounded-full bg-teal-50 border border-teal-200 text-teal-800">
+              {meetings.length} Scheduled Touchpoint{meetings.length > 1 ? 's' : ''}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            {meetings.map((meeting) => (
+              <div
+                key={meeting.id}
+                className="p-5 rounded-2xl bg-gradient-to-br from-slate-50 to-teal-50/30 border border-slate-200 flex flex-col justify-between gap-3 transition-all hover:border-teal-300 shadow-2xs"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <UserCheck className="w-4 h-4 text-teal-600" />
+                      <span className="font-bold text-xs sm:text-sm text-slate-900">
+                        {meeting.counselorName}
+                      </span>
+                    </div>
+                    <span
+                      className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                        meeting.status === 'Scheduled'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : meeting.status === 'Completed'
+                          ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                          : meeting.status === 'Rescheduled'
+                          ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                          : 'bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {meeting.status}
+                    </span>
+                  </div>
+
+                  {/* Meeting Details Card */}
+                  <div className="space-y-1.5 text-xs text-slate-700 bg-white p-3 rounded-xl border border-slate-200/80">
+                    <div className="flex items-center justify-between font-semibold">
+                      <span className="flex items-center gap-1.5 text-teal-900">
+                        <Calendar className="w-3.5 h-3.5 text-teal-600" />
+                        <span>{meeting.date}</span>
+                      </span>
+                      <span className="text-slate-600 font-mono text-[11px] flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        <span>{meeting.time}</span>
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+                      <span>⏱️ Duration: {meeting.duration}</span>
+                      <span>{meeting.mode === 'Online' ? '💻 Online Session' : '🏢 In-person Office'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-500">
+                  <span className="flex items-center gap-1">
+                    <Shield className="w-3 h-3 text-emerald-600" />
+                    <span>Confidential & Private</span>
+                  </span>
+                  <span>Campus Wellbeing Center</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main Grid: Trend Visualization + Core Dimensions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

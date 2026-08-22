@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { dbRun, dbGet, dbAll, initDatabase } from './server/db';
+import { analyzeWellbeingPattern } from './src/lib/patternEngine';
 
 dotenv.config();
 
@@ -499,6 +500,29 @@ app.post('/api/checkins', async (req, res) => {
     const studentRow = await dbGet('SELECT * FROM students WHERE id = ?', [studentId]);
     const updatedProfile = formatStudentProfile(studentRow, updatedCheckIns);
 
+    // If analysis indicates a concern requiring counselor review, generate a counselor notification
+    try {
+      const analysis = analyzeWellbeingPattern(updatedProfile.checkIns);
+      if (analysis.status === 'check_in_recommended') {
+        const notifId = `notif-${Date.now()}`;
+        await dbRun(
+          `INSERT INTO counselor_notifications (id, counselor_id, student_id, student_code, message, is_read, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            notifId,
+            'csl-1',
+            studentId,
+            studentRow?.anonymous_code || 'STU-1000',
+            'New wellbeing concern requires review.',
+            0,
+            new Date().toISOString(),
+          ]
+        );
+      }
+    } catch (notifErr) {
+      console.warn('Could not automatically create counselor notification:', notifErr);
+    }
+
     return res.status(201).json({
       message: 'Check-in recorded successfully',
       checkIn: {
@@ -553,7 +577,415 @@ app.put('/api/students/:id/consent', async (req, res) => {
   }
 });
 
-// 7. Counselor Actions (Get & Post)
+// 7. Counselor Notifications (Get & Read)
+app.get('/api/counselor/notifications', async (_req, res) => {
+  try {
+    const notifications = await dbAll('SELECT * FROM counselor_notifications');
+    const formatted = notifications.map((n) => ({
+      id: n.id,
+      counselorId: n.counselor_id,
+      studentId: n.student_id,
+      studentCode: n.student_code,
+      message: n.message,
+      isRead: Boolean(n.is_read),
+      createdAt: n.created_at,
+    }));
+    const unreadCount = formatted.filter((n) => !n.isRead).length;
+
+    return res.json({
+      notifications: formatted,
+      unreadCount,
+    });
+  } catch (err: any) {
+    console.error('Error fetching counselor notifications:', err);
+    return res.status(500).json({ error: 'Failed to fetch counselor notifications' });
+  }
+});
+
+app.put('/api/counselor/notifications/:id/read', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await dbRun('UPDATE counselor_notifications SET is_read = ? WHERE id = ?', [1, id]);
+    const updated = await dbGet('SELECT * FROM counselor_notifications WHERE id = ?', [id]);
+    if (updated) {
+      return res.json({
+        notification: {
+          id: updated.id,
+          counselorId: updated.counselor_id,
+          studentId: updated.student_id,
+          studentCode: updated.student_code,
+          message: updated.message,
+          isRead: Boolean(updated.is_read),
+          createdAt: updated.created_at,
+        },
+      });
+    }
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error('Error marking notification as read:', err);
+    return res.status(500).json({ error: 'Failed to mark notification as read' });
+  }
+});
+
+app.put('/api/counselor/notifications/read-all', async (_req, res) => {
+  try {
+    await dbRun('UPDATE counselor_notifications SET is_read = ?', [1]);
+    return res.json({ success: true, message: 'All counselor notifications marked as read' });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to mark all notifications as read' });
+  }
+});
+
+// 8. Counselor Meetings (Get, Post & Put)
+app.get('/api/counselor/meetings', async (req, res) => {
+  try {
+    const { studentId } = req.query;
+    let meetings;
+    if (studentId) {
+      meetings = await dbAll('SELECT * FROM counselor_meetings WHERE student_id = ?', [studentId]);
+    } else {
+      meetings = await dbAll('SELECT * FROM counselor_meetings');
+    }
+
+    const formatted = meetings.map((m) => ({
+      id: m.id,
+      studentId: m.student_id,
+      studentCode: m.student_code,
+      studentName: m.student_name,
+      counselorId: m.counselor_id,
+      counselorName: m.counselor_name,
+      date: m.date,
+      time: m.time,
+      duration: m.duration,
+      mode: m.mode,
+      note: m.note,
+      status: m.status,
+      createdAt: m.created_at,
+    }));
+
+    return res.json({ meetings: formatted });
+  } catch (err: any) {
+    console.error('Error fetching counselor meetings:', err);
+    return res.status(500).json({ error: 'Failed to fetch counselor meetings' });
+  }
+});
+
+app.post('/api/counselor/meetings', async (req, res) => {
+  try {
+    const {
+      studentId,
+      studentCode,
+      studentName,
+      counselorId,
+      counselorName,
+      date,
+      time,
+      duration,
+      mode,
+      note,
+      status,
+    } = req.body;
+
+    if (!studentId || !date || !time) {
+      return res.status(400).json({ error: 'studentId, date, and time are required' });
+    }
+
+    // Resolve student info if missing
+    let targetCode = studentCode;
+    let targetName = studentName;
+    if (!targetCode || !targetName) {
+      const stu = await dbGet('SELECT * FROM students WHERE id = ?', [studentId]);
+      if (stu) {
+        targetCode = targetCode || stu.anonymous_code;
+        targetName = targetName || stu.name;
+      }
+    }
+
+    const meetingId = `meet-${Date.now()}`;
+    const createdAt = new Date().toISOString();
+    const meetingMode = mode || 'In-person';
+    const meetingDuration = duration || '20 minutes';
+    const meetingStatus = status || 'Scheduled';
+    const finalCounselorName = counselorName || 'Dr. Ananya Sharma';
+
+    await dbRun(
+      `INSERT INTO counselor_meetings (
+        id, student_id, student_code, student_name, counselor_id, counselor_name,
+        date, time, duration, mode, note, status, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        meetingId,
+        studentId,
+        targetCode || 'STU-1000',
+        targetName || 'Student',
+        counselorId || 'csl-1',
+        finalCounselorName,
+        date,
+        time,
+        meetingDuration,
+        meetingMode,
+        note || '',
+        meetingStatus,
+        createdAt,
+      ]
+    );
+
+    // Also record a corresponding action in counselor action history
+    const actionId = `act-${Date.now()}`;
+    const timestamp = new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+    const actionNote = `Scheduled 1-on-1 Gentle Check-in (${meetingMode}, ${date} at ${time}, ${meetingDuration})${
+      note ? `: "${note}"` : '.'
+    }`;
+
+    await dbRun(
+      `INSERT INTO counselor_actions (id, student_id, student_code, counselor_name, action_type, note, timestamp, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        actionId,
+        studentId,
+        targetCode || 'STU-1000',
+        finalCounselorName,
+        'checkin_scheduled',
+        actionNote,
+        timestamp,
+        'completed',
+      ]
+    );
+
+    // Notify the student about the scheduled 1-on-1 meeting
+    try {
+      const studentNotifId = `st-notif-${Date.now()}`;
+      const studentNotifMsg = `Your counselor has scheduled a 1-on-1 check-in for ${date} at ${time}.`;
+      await dbRun(
+        `INSERT INTO student_notifications (
+          id, student_id, meeting_id, message, date, time, duration, mode, general_message, is_read, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          studentNotifId,
+          studentId,
+          meetingId,
+          studentNotifMsg,
+          date,
+          time,
+          meetingDuration,
+          meetingMode,
+          note || '1-on-1 gentle wellbeing check-in',
+          0,
+          createdAt,
+        ]
+      );
+    } catch (notifErr) {
+      console.warn('Could not automatically create student notification:', notifErr);
+    }
+
+    const createdMeeting = {
+      id: meetingId,
+      studentId,
+      studentCode: targetCode,
+      studentName: targetName,
+      counselorId: counselorId || 'csl-1',
+      counselorName: finalCounselorName,
+      date,
+      time,
+      duration: meetingDuration,
+      mode: meetingMode,
+      note: note || '',
+      status: meetingStatus,
+      createdAt,
+    };
+
+    return res.status(201).json({
+      message: 'Meeting scheduled successfully',
+      meeting: createdMeeting,
+    });
+  } catch (err: any) {
+    console.error('Error creating counselor meeting:', err);
+    return res.status(500).json({ error: 'Failed to schedule meeting' });
+  }
+});
+
+app.put('/api/counselor/meetings/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { date, time, duration, mode, note, status } = req.body;
+
+    const existing = await dbGet('SELECT * FROM counselor_meetings WHERE id = ?', [id]);
+    if (!existing) {
+      return res.status(404).json({ error: 'Meeting not found' });
+    }
+
+    const updatedDate = date !== undefined ? date : existing.date;
+    const updatedTime = time !== undefined ? time : existing.time;
+    const updatedDuration = duration !== undefined ? duration : existing.duration;
+    const updatedMode = mode !== undefined ? mode : existing.mode;
+    const updatedNote = note !== undefined ? note : existing.note;
+    const updatedStatus = status !== undefined ? status : existing.status;
+
+    await dbRun(
+      `UPDATE counselor_meetings SET date = ?, time = ?, duration = ?, mode = ?, note = ?, status = ? WHERE id = ?`,
+      [updatedDate, updatedTime, updatedDuration, updatedMode, updatedNote, updatedStatus, id]
+    );
+
+    // If status is updated or follow-up note added, record into counselor_actions audit history
+    if (updatedStatus === 'Completed') {
+      const actionId = `act-${Date.now()}`;
+      const timestamp = new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+      const actionNote = updatedNote
+        ? `Completed 1-on-1 Check-in (${updatedMode}, ${updatedDate} at ${updatedTime}): "${updatedNote}"`
+        : `Completed 1-on-1 Check-in (${updatedMode}, ${updatedDate} at ${updatedTime}).`;
+
+      await dbRun(
+        `INSERT INTO counselor_actions (id, student_id, student_code, counselor_name, action_type, note, timestamp, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          actionId,
+          existing.student_id,
+          existing.student_code || 'STU-1000',
+          existing.counselor_name || 'Dr. Ananya Sharma',
+          'touchpoint_logged',
+          actionNote,
+          timestamp,
+          'completed',
+        ]
+      );
+    } else if (updatedStatus === 'Rescheduled' && status !== undefined && status !== existing.status) {
+      const actionId = `act-${Date.now()}`;
+      const timestamp = new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+      const actionNote = `Rescheduled 1-on-1 Check-in to ${updatedDate} at ${updatedTime} (${updatedMode})${
+        updatedNote ? `: "${updatedNote}"` : '.'
+      }`;
+
+      await dbRun(
+        `INSERT INTO counselor_actions (id, student_id, student_code, counselor_name, action_type, note, timestamp, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          actionId,
+          existing.student_id,
+          existing.student_code || 'STU-1000',
+          existing.counselor_name || 'Dr. Ananya Sharma',
+          'checkin_scheduled',
+          actionNote,
+          timestamp,
+          'completed',
+        ]
+      );
+    } else if (updatedStatus === 'Cancelled' && status !== undefined && status !== existing.status) {
+      const actionId = `act-${Date.now()}`;
+      const timestamp = new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+      const actionNote = `Cancelled 1-on-1 Check-in for ${updatedDate} at ${updatedTime}${
+        updatedNote ? `: "${updatedNote}"` : '.'
+      }`;
+
+      await dbRun(
+        `INSERT INTO counselor_actions (id, student_id, student_code, counselor_name, action_type, note, timestamp, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          actionId,
+          existing.student_id,
+          existing.student_code || 'STU-1000',
+          existing.counselor_name || 'Dr. Ananya Sharma',
+          'status_override',
+          actionNote,
+          timestamp,
+          'completed',
+        ]
+      );
+    }
+
+    const updated = await dbGet('SELECT * FROM counselor_meetings WHERE id = ?', [id]);
+    return res.json({
+      message: 'Meeting updated successfully',
+      meeting: {
+        id: updated.id,
+        studentId: updated.student_id,
+        studentCode: updated.student_code,
+        studentName: updated.student_name,
+        counselorId: updated.counselor_id,
+        counselorName: updated.counselor_name,
+        date: updated.date,
+        time: updated.time,
+        duration: updated.duration,
+        mode: updated.mode,
+        note: updated.note,
+        status: updated.status,
+        createdAt: updated.created_at,
+      },
+    });
+  } catch (err: any) {
+    console.error('Error updating counselor meeting:', err);
+    return res.status(500).json({ error: 'Failed to update meeting' });
+  }
+});
+
+// 9. Student Notifications (Get & Mark Read)
+app.get('/api/student/notifications', async (req, res) => {
+  try {
+    const { studentId } = req.query;
+    if (!studentId || typeof studentId !== 'string') {
+      return res.status(400).json({ error: 'studentId query parameter is required' });
+    }
+
+    const rows = await dbAll('SELECT * FROM student_notifications WHERE student_id = ?', [studentId]);
+    const formatted = rows.map((n) => ({
+      id: n.id,
+      studentId: n.student_id,
+      meetingId: n.meeting_id,
+      message: n.message,
+      date: n.date,
+      time: n.time,
+      duration: n.duration,
+      mode: n.mode,
+      isRead: Boolean(n.is_read),
+      createdAt: n.created_at,
+    }));
+
+    const unreadCount = formatted.filter((n) => !n.isRead).length;
+    return res.json({ notifications: formatted, unreadCount });
+  } catch (err: any) {
+    console.error('Error fetching student notifications:', err);
+    return res.status(500).json({ error: 'Failed to fetch student notifications' });
+  }
+});
+
+app.put('/api/student/notifications/:id/read', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await dbRun('UPDATE student_notifications SET is_read = ? WHERE id = ?', [1, id]);
+    return res.json({ success: true, message: 'Notification marked as read' });
+  } catch (err: any) {
+    console.error('Error marking student notification as read:', err);
+    return res.status(500).json({ error: 'Failed to mark notification as read' });
+  }
+});
+
+// 10. Student Scheduled Meetings (Sanitized - Student sees only their own meeting appointment details without counselor follow-up notes/risk data)
+app.get('/api/student/meetings', async (req, res) => {
+  try {
+    const { studentId } = req.query;
+    if (!studentId || typeof studentId !== 'string') {
+      return res.status(400).json({ error: 'studentId query parameter is required' });
+    }
+
+    const rows = await dbAll('SELECT * FROM counselor_meetings WHERE student_id = ?', [studentId]);
+    const formatted = rows.map((m) => ({
+      id: m.id,
+      counselorName: m.counselor_name || 'Dr. Ananya Sharma',
+      date: m.date,
+      time: m.time,
+      duration: m.duration,
+      mode: m.mode,
+      status: m.status,
+      createdAt: m.created_at,
+    }));
+
+    return res.json({ meetings: formatted });
+  } catch (err: any) {
+    console.error('Error fetching student meetings:', err);
+    return res.status(500).json({ error: 'Failed to fetch student meetings' });
+  }
+});
+
+// 11. Counselor Actions (Get & Post)
 app.get('/api/counselor/actions', async (_req, res) => {
   try {
     const actions = await dbAll('SELECT * FROM counselor_actions ORDER BY created_at DESC');

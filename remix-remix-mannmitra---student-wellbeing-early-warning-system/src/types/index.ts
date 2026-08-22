@@ -84,6 +84,56 @@ export interface CounselorAction {
   status: 'pending' | 'completed';
 }
 
+export interface CounselorMeeting {
+  id: string;
+  studentId: string;
+  studentCode?: string;
+  studentName?: string;
+  counselorId: string;
+  counselorName?: string;
+  date: string;
+  time: string;
+  duration: string;
+  mode: 'In-person' | 'Online';
+  note?: string;
+  status: 'Scheduled' | 'Completed' | 'Rescheduled' | 'Cancelled';
+  createdAt: string;
+}
+
+export interface CounselorNotification {
+  id: string;
+  counselorId?: string | null;
+  studentId: string;
+  studentCode?: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface StudentNotification {
+  id: string;
+  studentId: string;
+  meetingId?: string;
+  message: string;
+  date?: string;
+  time?: string;
+  duration?: string;
+  mode?: 'In-person' | 'Online';
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface StudentMeetingInfo {
+  id: string;
+  counselorName: string;
+  date: string;
+  time: string;
+  duration: string;
+  mode: 'In-person' | 'Online';
+  status: 'Scheduled' | 'Completed' | 'Rescheduled' | 'Cancelled';
+  createdAt: string;
+}
+
 export interface AISummaryResponse {
   summary: string;
   keyObservations: string[];

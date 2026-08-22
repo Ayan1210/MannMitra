@@ -67,6 +67,46 @@ export interface DBCounselorAction {
   created_at?: string;
 }
 
+export interface DBCounselorMeeting {
+  id: string;
+  student_id: string;
+  student_code?: string;
+  student_name?: string;
+  counselor_id: string;
+  counselor_name?: string;
+  date: string;
+  time: string;
+  duration: string;
+  mode: string;
+  note?: string;
+  status: string;
+  created_at: string;
+}
+
+export interface DBCounselorNotification {
+  id: string;
+  counselor_id?: string | null;
+  student_id: string;
+  student_code?: string | null;
+  message: string;
+  is_read: number;
+  created_at: string;
+}
+
+export interface DBStudentNotification {
+  id: string;
+  student_id: string;
+  meeting_id?: string | null;
+  message: string;
+  date?: string | null;
+  time?: string | null;
+  duration?: string | null;
+  mode?: string | null;
+  general_message?: string | null;
+  is_read: number;
+  created_at: string;
+}
+
 export interface DBVoiceReflection {
   id: string;
   student_id?: string;
@@ -81,6 +121,9 @@ interface DatabaseSchema {
   staff_users: DBStaffUser[];
   check_ins: DBCheckIn[];
   counselor_actions: DBCounselorAction[];
+  counselor_meetings: DBCounselorMeeting[];
+  counselor_notifications: DBCounselorNotification[];
+  student_notifications: DBStudentNotification[];
   voice_reflections: DBVoiceReflection[];
 }
 
@@ -89,6 +132,9 @@ let inMemoryDB: DatabaseSchema = {
   staff_users: [],
   check_ins: [],
   counselor_actions: [],
+  counselor_meetings: [],
+  counselor_notifications: [],
+  student_notifications: [],
   voice_reflections: [],
 };
 
@@ -106,7 +152,17 @@ function loadFromDisk(): boolean {
   try {
     if (fs.existsSync(DB_FILE)) {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
-      inMemoryDB = JSON.parse(raw);
+      const data = JSON.parse(raw);
+      inMemoryDB = {
+        students: data.students || [],
+        staff_users: data.staff_users || [],
+        check_ins: data.check_ins || [],
+        counselor_actions: data.counselor_actions || [],
+        counselor_meetings: data.counselor_meetings || [],
+        counselor_notifications: data.counselor_notifications || [],
+        student_notifications: data.student_notifications || [],
+        voice_reflections: data.voice_reflections || [],
+      };
       return true;
     }
   } catch (err) {
@@ -212,7 +268,171 @@ export async function dbRun(sql: string, params: any[] = []): Promise<{ lastID: 
     return { lastID: inMemoryDB.voice_reflections.length, changes: 1 };
   }
 
-  // 5. UPDATE students SET ... WHERE id = ?
+  // 5. INSERT INTO counselor_notifications
+  if (normalized.startsWith('INSERT INTO counselor_notifications')) {
+    const [id, counselor_id, student_id, student_code, message, is_read, created_at] = params;
+    const newNotif: DBCounselorNotification = {
+      id,
+      counselor_id: counselor_id || null,
+      student_id,
+      student_code: student_code || null,
+      message: message || 'New wellbeing concern requires review.',
+      is_read: Number(is_read) || 0,
+      created_at: created_at || new Date().toISOString(),
+    };
+    if (!inMemoryDB.counselor_notifications) {
+      inMemoryDB.counselor_notifications = [];
+    }
+    inMemoryDB.counselor_notifications.unshift(newNotif);
+    persistToDisk();
+    return { lastID: inMemoryDB.counselor_notifications.length, changes: 1 };
+  }
+
+  // 6. INSERT INTO counselor_meetings
+  if (normalized.startsWith('INSERT INTO counselor_meetings')) {
+    const [
+      id,
+      student_id,
+      student_code,
+      student_name,
+      counselor_id,
+      counselor_name,
+      date,
+      time,
+      duration,
+      mode,
+      note,
+      status,
+      created_at,
+    ] = params;
+    const newMeeting: DBCounselorMeeting = {
+      id,
+      student_id,
+      student_code: student_code || undefined,
+      student_name: student_name || undefined,
+      counselor_id: counselor_id || 'csl-1',
+      counselor_name: counselor_name || 'Dr. Ananya Sharma',
+      date,
+      time,
+      duration: duration || '20 minutes',
+      mode: mode || 'In-person',
+      note: note || '',
+      status: status || 'Scheduled',
+      created_at: created_at || new Date().toISOString(),
+    };
+    if (!inMemoryDB.counselor_meetings) {
+      inMemoryDB.counselor_meetings = [];
+    }
+    inMemoryDB.counselor_meetings.unshift(newMeeting);
+    persistToDisk();
+    return { lastID: inMemoryDB.counselor_meetings.length, changes: 1 };
+  }
+
+  // 7. UPDATE counselor_meetings SET ... WHERE id = ?
+  if (normalized.includes('UPDATE counselor_meetings SET') && normalized.includes('WHERE id = ?')) {
+    if (!inMemoryDB.counselor_meetings) {
+      inMemoryDB.counselor_meetings = [];
+    }
+    const targetId = params[params.length - 1];
+    const meeting = inMemoryDB.counselor_meetings.find((m) => m.id === targetId);
+    if (meeting) {
+      if (normalized.includes('date = ?') && params.length >= 7) {
+        const [date, time, duration, mode, note, status] = params;
+        if (date !== undefined) meeting.date = date;
+        if (time !== undefined) meeting.time = time;
+        if (duration !== undefined) meeting.duration = duration;
+        if (mode !== undefined) meeting.mode = mode;
+        if (note !== undefined) meeting.note = note;
+        if (status !== undefined) meeting.status = status;
+      } else if (normalized.includes('status = ?') && normalized.includes('note = ?') && params.length === 3) {
+        const [status, note] = params;
+        if (status !== undefined) meeting.status = status;
+        if (note !== undefined) meeting.note = note;
+      } else if (normalized.includes('status = ?') && params.length === 2) {
+        meeting.status = params[0];
+      } else if (normalized.includes('note = ?') && params.length === 2) {
+        meeting.note = params[0];
+      }
+      persistToDisk();
+      return { lastID: 0, changes: 1 };
+    }
+  }
+
+  // 8. UPDATE counselor_notifications SET is_read = ? WHERE id = ?
+  if (normalized.includes('UPDATE counselor_notifications SET is_read = ? WHERE id = ?')) {
+    const [is_read, id] = params;
+    if (inMemoryDB.counselor_notifications) {
+      const notif = inMemoryDB.counselor_notifications.find((n) => n.id === id);
+      if (notif) {
+        notif.is_read = Number(is_read);
+        persistToDisk();
+        return { lastID: 0, changes: 1 };
+      }
+    }
+  }
+
+  // 9. UPDATE counselor_notifications SET is_read = ? (e.g. read all)
+  if (normalized.includes('UPDATE counselor_notifications SET is_read = ?') && !normalized.includes('WHERE id = ?')) {
+    const [is_read] = params;
+    if (inMemoryDB.counselor_notifications) {
+      inMemoryDB.counselor_notifications.forEach((n) => {
+        n.is_read = Number(is_read);
+      });
+      persistToDisk();
+      return { lastID: 0, changes: inMemoryDB.counselor_notifications.length };
+    }
+  }
+
+  // 10. INSERT INTO student_notifications
+  if (normalized.startsWith('INSERT INTO student_notifications')) {
+    const [
+      id,
+      student_id,
+      meeting_id,
+      message,
+      date,
+      time,
+      duration,
+      mode,
+      general_message,
+      is_read,
+      created_at,
+    ] = params;
+    const newNotif: DBStudentNotification = {
+      id,
+      student_id,
+      meeting_id: meeting_id || null,
+      message,
+      date: date || null,
+      time: time || null,
+      duration: duration || null,
+      mode: mode || null,
+      general_message: general_message || null,
+      is_read: Number(is_read || 0),
+      created_at: created_at || new Date().toISOString(),
+    };
+    if (!inMemoryDB.student_notifications) {
+      inMemoryDB.student_notifications = [];
+    }
+    inMemoryDB.student_notifications.unshift(newNotif);
+    persistToDisk();
+    return { lastID: inMemoryDB.student_notifications.length, changes: 1 };
+  }
+
+  // 11. UPDATE student_notifications SET is_read = ? WHERE id = ?
+  if (normalized.includes('UPDATE student_notifications SET is_read = ? WHERE id = ?')) {
+    const [is_read, id] = params;
+    if (inMemoryDB.student_notifications) {
+      const notif = inMemoryDB.student_notifications.find((n) => n.id === id);
+      if (notif) {
+        notif.is_read = Number(is_read);
+        persistToDisk();
+        return { lastID: 0, changes: 1 };
+      }
+    }
+  }
+
+  // 12. UPDATE students SET ... WHERE id = ?
   if (normalized.includes('UPDATE students SET')) {
     const [opted_in, share_indicators, allow_stats, consent_date, id] = params;
     const student = inMemoryDB.students.find((s) => s.id === id);
@@ -260,6 +480,20 @@ export async function dbGet<T = any>(sql: string, params: any[] = []): Promise<T
     return found as unknown as T;
   }
 
+  // SELECT * FROM counselor_notifications WHERE id = ?
+  if (normalized.includes('FROM counselor_notifications WHERE id = ?')) {
+    const targetId = params[0];
+    const found = inMemoryDB.counselor_notifications?.find((n) => n.id === targetId);
+    return found as unknown as T;
+  }
+
+  // SELECT * FROM counselor_meetings WHERE id = ?
+  if (normalized.includes('FROM counselor_meetings WHERE id = ?')) {
+    const targetId = params[0];
+    const found = inMemoryDB.counselor_meetings?.find((m) => m.id === targetId);
+    return found as unknown as T;
+  }
+
   // SELECT COUNT(*) as count FROM students
   if (normalized.includes('SELECT COUNT(*)')) {
     return { count: inMemoryDB.students.length } as unknown as T;
@@ -300,6 +534,63 @@ export async function dbAll<T = any>(sql: string, params: any[] = []): Promise<T
   // SELECT * FROM counselor_actions
   if (normalized.startsWith('SELECT * FROM counselor_actions')) {
     return inMemoryDB.counselor_actions as unknown as T[];
+  }
+
+  // SELECT * FROM counselor_meetings WHERE student_id = ?
+  if (normalized.includes('FROM counselor_meetings WHERE student_id = ?')) {
+    const targetStudentId = params[0];
+    if (!inMemoryDB.counselor_meetings) {
+      inMemoryDB.counselor_meetings = [];
+    }
+    const filtered = inMemoryDB.counselor_meetings
+      .filter((m) => m.student_id === targetStudentId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return filtered as unknown as T[];
+  }
+
+  // SELECT * FROM counselor_meetings
+  if (normalized.startsWith('SELECT * FROM counselor_meetings')) {
+    if (!inMemoryDB.counselor_meetings) {
+      inMemoryDB.counselor_meetings = [];
+    }
+    const sorted = [...inMemoryDB.counselor_meetings].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    return sorted as unknown as T[];
+  }
+
+  // SELECT * FROM counselor_notifications
+  if (normalized.startsWith('SELECT * FROM counselor_notifications')) {
+    if (!inMemoryDB.counselor_notifications) {
+      inMemoryDB.counselor_notifications = [];
+    }
+    const sorted = [...inMemoryDB.counselor_notifications].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    return sorted as unknown as T[];
+  }
+
+  // SELECT * FROM student_notifications WHERE student_id = ?
+  if (normalized.includes('FROM student_notifications WHERE student_id = ?')) {
+    const targetStudentId = params[0];
+    if (!inMemoryDB.student_notifications) {
+      inMemoryDB.student_notifications = [];
+    }
+    const filtered = inMemoryDB.student_notifications
+      .filter((n) => n.student_id === targetStudentId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return filtered as unknown as T[];
+  }
+
+  // SELECT * FROM student_notifications
+  if (normalized.startsWith('SELECT * FROM student_notifications')) {
+    if (!inMemoryDB.student_notifications) {
+      inMemoryDB.student_notifications = [];
+    }
+    const sorted = [...inMemoryDB.student_notifications].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    return sorted as unknown as T[];
   }
 
   return [] as T[];
@@ -423,6 +714,100 @@ export async function initDatabase() {
     status: 'completed',
     created_at: new Date().toISOString(),
   });
+
+  // Seed initial counselor meetings
+  if (!inMemoryDB.counselor_meetings || inMemoryDB.counselor_meetings.length === 0) {
+    inMemoryDB.counselor_meetings = [
+      {
+        id: 'meet-seed-1',
+        student_id: 'stu-1024',
+        student_code: 'STU-1024',
+        student_name: 'Aarav Patel',
+        counselor_id: 'csl-1',
+        counselor_name: 'Dr. Ananya Sharma',
+        date: '2026-08-25',
+        time: '11:30 AM',
+        duration: '20 minutes',
+        mode: 'In-person',
+        note: 'Proactive check-in regarding lab workload pacing and routine stabilization.',
+        status: 'Scheduled',
+        created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+      },
+      {
+        id: 'meet-seed-2',
+        student_id: 'stu-2048',
+        student_code: 'STU-2048',
+        student_name: 'Priya Iyer',
+        counselor_id: 'csl-1',
+        counselor_name: 'Dr. Ananya Sharma',
+        date: '2026-08-21',
+        time: '09:30 AM',
+        duration: '20 minutes',
+        mode: 'In-person',
+        note: 'Discussed academic workload and sleep routine. Follow-up recommended next week.',
+        status: 'Completed',
+        created_at: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
+      },
+      {
+        id: 'meet-seed-3',
+        student_id: 'stu-3096',
+        student_code: 'STU-3096',
+        student_name: 'Rohan Verma',
+        counselor_id: 'csl-1',
+        counselor_name: 'Dr. Ananya Sharma',
+        date: '2026-08-26',
+        time: '02:00 PM',
+        duration: '30 minutes',
+        mode: 'Online',
+        note: 'Rescheduled per student request to avoid lab midterm clash.',
+        status: 'Rescheduled',
+        created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+      },
+    ];
+  }
+
+  // Seed initial counselor notifications for students requiring review
+  if (!inMemoryDB.counselor_notifications || inMemoryDB.counselor_notifications.length === 0) {
+    inMemoryDB.counselor_notifications = [
+      {
+        id: 'notif-seed-1',
+        counselor_id: 'csl-1',
+        student_id: 'stu-1024',
+        student_code: 'STU-1024',
+        message: 'New wellbeing concern requires review.',
+        is_read: 0,
+        created_at: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
+      },
+      {
+        id: 'notif-seed-2',
+        counselor_id: 'csl-1',
+        student_id: 'stu-2048',
+        student_code: 'STU-2048',
+        message: 'New wellbeing concern requires review.',
+        is_read: 0,
+        created_at: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+      },
+    ];
+  }
+
+  // Seed initial student notifications
+  if (!inMemoryDB.student_notifications || inMemoryDB.student_notifications.length === 0) {
+    inMemoryDB.student_notifications = [
+      {
+        id: 'st-notif-seed-1',
+        student_id: 'stu-1024',
+        meeting_id: 'meet-seed-1',
+        message: 'Your counselor has scheduled a 1-on-1 check-in for 25 August at 11:30 AM.',
+        date: '2026-08-25',
+        time: '11:30 AM',
+        duration: '20 minutes',
+        mode: 'In-person',
+        general_message: 'Gentle check-in regarding lab assignment workload pacing and sleep rhythm.',
+        is_read: 0,
+        created_at: new Date().toISOString(),
+      },
+    ];
+  }
 
   persistToDisk();
   console.log(`Database seeded with ${inMemoryDB.students.length} students, ${inMemoryDB.staff_users.length} staff, and ${inMemoryDB.check_ins.length} check-ins.`);

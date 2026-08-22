@@ -1,4 +1,4 @@
-import { StudentProfile, StaffProfile, AuthSessionUser, CheckInRecord, CounselorAction } from '../types';
+import { StudentProfile, StaffProfile, AuthSessionUser, CheckInRecord, CounselorAction, CounselorNotification, CounselorMeeting, StudentNotification, StudentMeetingInfo } from '../types';
 import { INITIAL_STUDENTS } from './mockData';
 
 const TOKEN_KEY = 'mannmitra_auth_token';
@@ -519,6 +519,246 @@ export async function logCounselorAction(
   }
 
   return fallbackAction;
+}
+
+export async function fetchCounselorNotifications(): Promise<CounselorNotification[]> {
+  try {
+    const res = await fetch('/api/counselor/notifications');
+    const result = await parseJsonSafely(res);
+    if (result.ok && Array.isArray(result.data?.notifications)) {
+      return result.data.notifications;
+    }
+  } catch (err) {
+    console.warn('Could not fetch counselor notifications from backend:', err);
+  }
+  return [
+    {
+      id: 'notif-seed-1',
+      counselorId: 'csl-1',
+      studentId: 'stu-1024',
+      studentCode: 'STU-1024',
+      message: 'New wellbeing concern requires review.',
+      isRead: false,
+      createdAt: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
+    },
+    {
+      id: 'notif-seed-2',
+      counselorId: 'csl-1',
+      studentId: 'stu-2048',
+      studentCode: 'STU-2048',
+      message: 'New wellbeing concern requires review.',
+      isRead: false,
+      createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+    },
+  ];
+}
+
+export async function markCounselorNotificationRead(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/counselor/notifications/${id}/read`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const result = await parseJsonSafely(res);
+    return result.ok;
+  } catch (err) {
+    console.warn('Could not mark notification as read:', err);
+    return false;
+  }
+}
+
+export async function markAllCounselorNotificationsRead(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/counselor/notifications/read-all', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const result = await parseJsonSafely(res);
+    return result.ok;
+  } catch (err) {
+    console.warn('Could not mark all notifications as read:', err);
+    return false;
+  }
+}
+
+export async function fetchCounselorMeetings(studentId?: string): Promise<CounselorMeeting[]> {
+  try {
+    const url = studentId
+      ? `/api/counselor/meetings?studentId=${encodeURIComponent(studentId)}`
+      : '/api/counselor/meetings';
+    const res = await fetch(url);
+    const result = await parseJsonSafely(res);
+    if (result.ok && Array.isArray(result.data?.meetings)) {
+      return result.data.meetings;
+    }
+  } catch (err) {
+    console.warn('Could not fetch counselor meetings from backend:', err);
+  }
+  return [
+    {
+      id: 'meet-seed-1',
+      studentId: 'stu-1024',
+      studentCode: 'STU-1024',
+      studentName: 'Aarav Patel',
+      counselorId: 'csl-1',
+      counselorName: 'Dr. Ananya Sharma',
+      date: '2026-08-25',
+      time: '11:30 AM',
+      duration: '20 minutes',
+      mode: 'In-person',
+      note: 'Proactive check-in regarding lab workload pacing and routine stabilization.',
+      status: 'Scheduled',
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'meet-seed-2',
+      studentId: 'stu-2048',
+      studentCode: 'STU-2048',
+      studentName: 'Priya Iyer',
+      counselorId: 'csl-1',
+      counselorName: 'Dr. Ananya Sharma',
+      date: '2026-08-21',
+      time: '09:30 AM',
+      duration: '20 minutes',
+      mode: 'In-person',
+      note: 'Discussed academic workload and sleep routine. Follow-up recommended next week.',
+      status: 'Completed',
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'meet-seed-3',
+      studentId: 'stu-3096',
+      studentCode: 'STU-3096',
+      studentName: 'Rohan Verma',
+      counselorId: 'csl-1',
+      counselorName: 'Dr. Ananya Sharma',
+      date: '2026-08-26',
+      time: '02:00 PM',
+      duration: '30 minutes',
+      mode: 'Online',
+      note: 'Rescheduled per student request to avoid lab midterm clash.',
+      status: 'Rescheduled',
+      createdAt: new Date().toISOString(),
+    },
+  ];
+}
+
+export async function scheduleCounselorMeeting(meetingData: {
+  studentId: string;
+  studentCode?: string;
+  studentName?: string;
+  counselorId?: string;
+  counselorName?: string;
+  date: string;
+  time: string;
+  duration?: string;
+  mode?: 'In-person' | 'Online';
+  note?: string;
+}): Promise<CounselorMeeting | null> {
+  try {
+    const res = await fetch('/api/counselor/meetings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(meetingData),
+    });
+    const result = await parseJsonSafely(res);
+    if (result.ok && result.data?.meeting) {
+      return result.data.meeting;
+    }
+  } catch (err) {
+    console.warn('Could not schedule counselor meeting:', err);
+  }
+  return null;
+}
+
+export async function updateCounselorMeeting(
+  id: string,
+  updateData: {
+    status?: 'Scheduled' | 'Completed' | 'Rescheduled' | 'Cancelled';
+    date?: string;
+    time?: string;
+    duration?: string;
+    mode?: 'In-person' | 'Online';
+    note?: string;
+  }
+): Promise<CounselorMeeting | null> {
+  try {
+    const res = await fetch(`/api/counselor/meetings/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updateData),
+    });
+    const result = await parseJsonSafely(res);
+    if (result.ok && result.data?.meeting) {
+      return result.data.meeting;
+    }
+  } catch (err) {
+    console.warn('Could not update counselor meeting:', err);
+  }
+  return null;
+}
+
+export async function fetchStudentNotifications(studentId: string): Promise<StudentNotification[]> {
+  try {
+    const res = await fetch(`/api/student/notifications?studentId=${encodeURIComponent(studentId)}`);
+    const result = await parseJsonSafely(res);
+    if (result.ok && Array.isArray(result.data?.notifications)) {
+      return result.data.notifications;
+    }
+  } catch (err) {
+    console.warn('Could not fetch student notifications from backend:', err);
+  }
+  return [
+    {
+      id: 'st-notif-seed-1',
+      studentId: studentId,
+      meetingId: 'meet-seed-1',
+      message: 'Your counselor has scheduled a 1-on-1 check-in for 25 August at 11:30 AM.',
+      date: '2026-08-25',
+      time: '11:30 AM',
+      duration: '20 minutes',
+      mode: 'In-person',
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    },
+  ];
+}
+
+export async function markStudentNotificationRead(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/student/notifications/${id}/read`, {
+      method: 'PUT',
+    });
+    const result = await parseJsonSafely(res);
+    return Boolean(result.ok);
+  } catch (err) {
+    console.warn('Could not mark student notification read:', err);
+    return false;
+  }
+}
+
+export async function fetchStudentMeetings(studentId: string): Promise<StudentMeetingInfo[]> {
+  try {
+    const res = await fetch(`/api/student/meetings?studentId=${encodeURIComponent(studentId)}`);
+    const result = await parseJsonSafely(res);
+    if (result.ok && Array.isArray(result.data?.meetings)) {
+      return result.data.meetings;
+    }
+  } catch (err) {
+    console.warn('Could not fetch student meetings from backend:', err);
+  }
+  return [
+    {
+      id: 'meet-seed-1',
+      counselorName: 'Dr. Ananya Sharma',
+      date: '2026-08-25',
+      time: '11:30 AM',
+      duration: '20 minutes',
+      mode: 'In-person',
+      status: 'Scheduled',
+      createdAt: new Date().toISOString(),
+    },
+  ];
 }
 
 export async function processVoiceReflection(
